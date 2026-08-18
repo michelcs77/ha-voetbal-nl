@@ -1,0 +1,5 @@
+{
+  "services": {
+    "genereer_seizoens_pdf": {"service": "mdi:file-pdf-box"}
+  }
+}

@@ -1,0 +1,367 @@
+{
+  "title": "HA Voetbal.nl",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Voetbal.nl-account koppelen",
+        "description": "Log in met je eigen Voetbal.nl-account.",
+        "data": {
+          "email": "E-mailadres",
+          "password": "Wachtwoord"
+        }
+      },
+      "club_search": {
+        "title": "Club zoeken",
+        "description": "Typ (een deel van) de clubnaam. Voetbal.nl zoekt landelijk.",
+        "data": {
+          "club_query": "Clubnaam"
+        }
+      },
+      "club_select": {
+        "title": "Club kiezen",
+        "description": "Kies de juiste vereniging.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team_select": {
+        "title": "Teams kiezen",
+        "description": "Selecteer één of meerdere teams. Bij dubbele namen wordt waar mogelijk speeldag en competitie getoond.",
+        "data": {
+          "team_ids": "Teams"
+        }
+      },
+      "reconfigure": {
+        "title": "Teams beheren",
+        "description": "Voeg teams toe of verwijder teams. De integratie wordt daarna automatisch opnieuw geladen.",
+        "data": {
+          "team_ids": "Teams"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "De login is geweigerd door Voetbal.nl.",
+      "cannot_connect": "Kan Voetbal.nl niet bereiken of de gegevens niet ophalen.",
+      "unknown": "Er is een onbekende fout opgetreden.",
+      "no_clubs": "Geen clubs gevonden met deze zoekterm.",
+      "no_teams": "Voor deze club zijn geen teams gevonden.",
+      "select_team": "Selecteer minimaal één team."
+    },
+    "abort": {
+      "already_configured": "Deze club is voor dit Voetbal.nl-account al toegevoegd.",
+      "reconfigure_successful": "De geselecteerde teams zijn bijgewerkt."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HA Voetbal.nl configureren",
+        "description": "Kies wat je wilt beheren. Bij iedere keuze staat kort uitgelegd wat je daar kunt instellen.",
+        "data": {
+          "config_section": "Onderdeel"
+        }
+      },
+      "players": {
+        "title": "Spelersbeheer — {team}",
+        "description": "Selecteer de zichtbare spelers van Voetbal.nl voor je lokale selectie. Afgeschermde spelers op Voetbal.nl: {hidden}. Voeg ontbrekende spelers handmatig toe, één naam per regel.",
+        "data": {
+          "selected_players": "Geselecteerde spelers",
+          "manual_players": "Handmatig toegevoegde spelers"
+        },
+        "data_description": {
+          "selected_players": "Selecteer welke zichtbare Voetbal.nl-spelers lokaal bij dit team horen.",
+          "manual_players": "Voeg ontbrekende of afgeschermde spelers handmatig toe, één naam per regel."
+        }
+      },
+      "route": {
+        "title": "Route-instellingen",
+        "description": "Vul één OpenRouteService API-sleutel in en kies het team waarvoor je het vertrekpunt wilt instellen.",
+        "data": {
+          "route_api_key": "OpenRouteService API-sleutel",
+          "route_team_id": "Team"
+        }
+      },
+      "route_team": {
+        "title": "Vertrekpunt — {team}",
+        "description": "Standaard gebruiken we de thuisaccommodatie uit Voetbal.nl: {home}. Kies Eigen vertrekpunt om bijvoorbeeld een parkeerplaats of ander verzamelpunt te gebruiken.",
+        "data": {
+          "mode": "Vertrekpunt",
+          "name": "Naam eigen vertrekpunt",
+          "latitude": "Latitude eigen vertrekpunt",
+          "longitude": "Longitude eigen vertrekpunt"
+        }
+      },
+      "driving_team": {
+        "title": "Rijschema",
+        "description": "Kies het team waarvoor je het rijschema wilt instellen.",
+        "data": {
+          "driving_team_id": "Team"
+        }
+      },
+      "driving": {
+        "title": "Rijschema — {team}",
+        "description": "Stel het aantal auto's per uitwedstrijd in en sluit spelers uit die niet als chauffeur hoeven te worden ingepland. Nieuwe uitwedstrijden worden automatisch aangevuld; de verdeling houdt eerst het aantal ritten en daarna de kilometers zo gelijk mogelijk.",
+        "data": {
+          "cars_per_away_match": "Aantal auto's per uitwedstrijd",
+          "excluded_drivers": "Niet inplannen als chauffeur",
+          "add_supplemental_schedule": "Aanvullend rijschema maken voor nieuwe uitwedstrijden"
+        },
+        "data_description": {
+          "cars_per_away_match": "Aantal chauffeurs/auto's dat per uitwedstrijd automatisch in het rijschema wordt ingepland.",
+          "excluded_drivers": "Deze spelers worden voor het hele seizoen niet als chauffeur ingepland.",
+          "add_supplemental_schedule": "Handmatige controleoptie. Nieuwe uitwedstrijden worden normaal al automatisch aangevuld; bestaande toewijzingen blijven behouden."
+        }
+      },
+      "players_team": {
+        "title": "Spelersbeheer",
+        "description": "Kies het team waarvan je de spelers wilt beheren.",
+        "data": {
+          "players_team_id": "Team"
+        }
+      },
+      "training_team": {
+        "title": "Trainingsschema",
+        "description": "Kies het team waarvan je het trainingsschema wilt beheren.",
+        "data": {
+          "training_team_id": "Team"
+        }
+      },
+      "training": {
+        "title": "Trainingsschema — {team}",
+        "description": "Stel de start- en einddatum van het trainingsschema, trainingen, schoolvakanties en vakantie-overschrijvingen in voor {team}.",
+        "data": {
+          "training_1_day": "Training 1 — dag",
+          "training_1_meeting": "Training 1 — verzameltijd",
+          "training_1_start": "Training 1 — starttijd",
+          "training_1_end": "Training 1 — eindtijd",
+          "training_1_field": "Training 1 — veld",
+          "training_2_day": "Training 2 — dag",
+          "training_2_meeting": "Training 2 — verzameltijd",
+          "training_2_start": "Training 2 — starttijd",
+          "training_2_end": "Training 2 — eindtijd",
+          "training_2_field": "Training 2 — veld",
+          "training_3_day": "Training 3 — dag",
+          "training_3_meeting": "Training 3 — verzameltijd",
+          "training_3_start": "Training 3 — starttijd",
+          "training_3_end": "Training 3 — eindtijd",
+          "training_3_field": "Training 3 — veld",
+          "school_holidays_enabled": "Niet trainen tijdens schoolvakanties",
+          "school_holiday_region": "Schoolvakantieregio",
+          "holiday_training_overrides": "Toch trainen tijdens schoolvakantie (DD-MM-JJJJ)",
+          "training_schedule_start": "Startdatum trainingsschema (DD-MM-JJJJ)",
+          "training_schedule_end": "Einddatum trainingsschema (DD-MM-JJJJ)",
+          "poll_days_before": "Poll versturen - aantal dagen voor training",
+          "poll_time": "Poll versturen - tijdstip (UU:MM)",
+          "reminder_days_before": "Reminder - aantal dagen voor training",
+          "reminder_time": "Reminder - tijdstip (UU:MM)",
+          "production_enabled": "Automatische WhatsApp-productie voor trainingen",
+          "training_info_enabled": "Trainingsdagbericht automatisch versturen",
+          "training_info_hours_before": "Trainingsdagbericht - aantal uren voor training",
+          "training_weather_enabled": "Weersverwachting toevoegen aan trainingsdagbericht",
+          "training_attendance_summary_enabled": "Aanwezigheidsstand toevoegen aan trainingsdagbericht",
+          "training_coach_enabled": "Gemini-woordje van de coach toevoegen aan trainingsdagbericht"
+        },
+        "data_description": {
+          "school_holidays_enabled": "Slaat trainingen over die binnen de officiële schoolvakanties van de gekozen regio vallen.",
+          "school_holiday_region": "Kies Noord, Midden of Zuid. Automatisch gebruikt de clublocatie als basis.",
+          "holiday_training_overrides": "Voer meerdere datums in, één datum per regel. Gebruik exact DD-MM-JJJJ, bijvoorbeeld 20-10-2026. Op deze datums gaat de normale training WEL door, ook als het schoolvakantie is.",
+          "training_schedule_start": "Eerste datum waarop het trainingsschema wordt opgebouwd.",
+          "training_schedule_end": "Laatste datum waarop het trainingsschema wordt opgebouwd.",
+          "production_enabled": "Aan: nieuwe trainingspolls worden automatisch naar de productiegroep gestuurd. Uit: er worden geen nieuwe productiepolls gestart; bestaande actieve polls worden wel afgemaakt, inclusief reminder en sluiten bij trainingstart.",
+          "training_info_enabled": "Stuurt automatisch een trainingsinfo-bericht naar de productiegroep vóór de training.",
+          "training_info_hours_before": "Standaard 2 uur voor de start van de training.",
+          "training_weather_enabled": "Gebruikt de actuele verwachting rond de starttijd. Een weerfout blokkeert het bericht niet.",
+          "training_attendance_summary_enabled": "Voegt aantallen aanwezig, afwezig, geblesseerd en nog niet gereageerd toe.",
+          "training_coach_enabled": "Genereert maximaal circa 60 woorden. Bij een Gemini-fout gaat het trainingsdagbericht zonder AI-tekst door."
+        }
+      },
+      "match_team": {
+        "title": "Wedstrijdinstellingen",
+        "description": "Kies het team waarvoor je wedstrijdinstellingen wilt beheren.",
+        "data": {
+          "match_team_id": "Team"
+        }
+      },
+      "match_settings": {
+        "title": "Wedstrijdinstellingen — {team}",
+        "description": "Beheer instellingen die gebruikt worden voor wedstrijddagen. Nieuwe wedstrijdopties kunnen later in dit scherm worden toegevoegd.",
+        "data": {
+          "match_present_minutes": "Minuten vóór wedstrijd aanwezig"
+        },
+        "data_description": {
+          "match_present_minutes": "Standaard 45 minuten. Thuis wordt dit van de wedstrijdtijd afgetrokken. Uit wordt daarnaast ook de ORS-reistijd afgetrokken."
+        }
+      },
+      "whatsapp_start": {
+        "title": "WhatsApp / WAHA",
+        "description": "Beheer de WAHA-verbinding of koppel WhatsApp-groepen aan een voetbalteam.",
+        "data": {
+          "waha_action": "Wat wil je beheren?"
+        }
+      },
+      "whatsapp_connection": {
+        "title": "WAHA verbinding",
+        "description": "Vul de WAHA-verbinding in. De verbinding wordt getest; er wordt nog niets naar WhatsApp verstuurd.",
+        "data": {
+          "base_url": "WAHA URL",
+          "api_key": "WAHA API-key",
+          "webhook_base_url": "Home Assistant webhook basis-URL",
+          "webhook_local_only": "Webhook alleen lokaal toestaan"
+        }
+      },
+      "whatsapp_session": {
+        "title": "WAHA sessie",
+        "description": "Kies de actieve WhatsApp-sessie. Daarna worden de groepen opgehaald.",
+        "data": {
+          "session": "WAHA sessie"
+        }
+      },
+      "whatsapp_load_groups": {
+        "title": "WhatsApp groepen ophalen",
+        "description": "De groepen konden niet worden opgehaald. Controleer de WAHA-verbinding en probeer opnieuw.",
+        "data": {}
+      },
+      "whatsapp_team": {
+        "title": "WhatsApp-groepen koppelen",
+        "description": "Kies het voetbalteam waarvoor je een testgroep en productiegroep wilt instellen.",
+        "data": {
+          "whatsapp_team_id": "Voetbalteam"
+        }
+      },
+      "whatsapp_identity_start": {
+        "title": "WhatsApp matching vernieuwen",
+        "description": "WhatsApp-groepen en groepsleden worden opnieuw opgehaald uit WAHA voordat je een koppeling maakt.",
+        "data": {}
+      },
+      "whatsapp_identity_team": {
+        "title": "WhatsApp matching — team",
+        "description": "Kies het HA/Voetbal.nl-team waarvoor je een WhatsApp-koppeling wilt maken.",
+        "data": {
+          "whatsapp_identity_team_id": "Team"
+        }
+      },
+      "whatsapp_identity_group": {
+        "title": "WhatsApp matching — groep",
+        "description": "Kies de WhatsApp-groep en geef aan of de koppeling voor productie of test is. De groepsleden worden nu vernieuwd.",
+        "data": {
+          "whatsapp_identity_group_id": "WhatsApp-groep",
+          "whatsapp_identity_environment": "Omgeving"
+        }
+      },
+      "whatsapp_identity_mapping": {
+        "title": "WhatsApp matching — {team}",
+        "description": "Team: {team} · Groep: {group}. Overzicht: {members}. Alle koppelingen staan hieronder. HA-naam ↔ WhatsApp-naam, type en Productie/Test kun je per persoon instellen.",
+        "data": {
+          "whatsapp_identity_wa_id": "WhatsApp-contact",
+          "whatsapp_identity_person": "HA-persoon",
+          "whatsapp_identity_role": "Rol"
+        },
+        "data_description": {
+          "whatsapp_identity_wa_id": "Kies het WhatsApp-contact zoals WAHA het aanlevert. De WA-ID wordt bij de koppeling opgeslagen.",
+          "whatsapp_identity_person": "Kies de persoon uit het geselecteerde HA-team.",
+          "whatsapp_identity_role": "Kies Speler of Staf. De rol moet overeenkomen met de gekozen HA-persoon."
+        }
+      },
+      "whatsapp_groups": {
+        "title": "WhatsApp-groepen voor {team}",
+        "description": "Kies test- en productiegroep en stel per team in wanneer de aanwezigheidspoll en reminder worden verstuurd.",
+        "data": {
+          "test_group_id": "Testgroep",
+          "prod_group_id": "Productiegroep",
+          "poll_days_before": "Poll versturen - aantal dagen voor wedstrijd",
+          "poll_time": "Poll versturen - tijdstip (UU:MM)",
+          "reminder_days_before": "Reminder - aantal dagen voor wedstrijd",
+          "reminder_time": "Reminder - tijdstip (UU:MM)",
+          "production_enabled": "Automatische WhatsApp-productie voor wedstrijden",
+          "matchday_message_enabled": "Wedstrijddagbericht automatisch versturen",
+          "matchday_message_time": "Wedstrijddagbericht - tijdstip (UU:MM)",
+          "matchday_weather_enabled": "Weersverwachting toevoegen aan wedstrijddagbericht",
+          "matchday_coach_enabled": "Gemini-woordje van de coach toevoegen aan wedstrijddagbericht",
+          "assistant_name": "Naam digitale stafassistent"
+        },
+        "data_description": {
+          "production_enabled": "Aan: nieuwe wedstrijdpolls worden automatisch naar de productiegroep gestuurd. Uit: er worden geen nieuwe productiepolls gestart; bestaande actieve polls worden wel afgemaakt, inclusief reminder en sluiten bij aftrap.",
+          "matchday_message_enabled": "Stuurt op de wedstrijddag automatisch wedstrijdinfo naar de productiegroep.",
+          "matchday_message_time": "Standaard 09:00 op de wedstrijddag.",
+          "matchday_weather_enabled": "Gebruikt de actuele verwachting rond de aftraptijd op de wedstrijdlocatie. Een weerfout blokkeert het bericht niet.",
+          "matchday_coach_enabled": "Genereert maximaal circa 60 woorden. Bij een Gemini-fout gaat het wedstrijddagbericht zonder AI-tekst door.",
+          "assistant_name": "Naam die onderaan WhatsApp-berichten van dit team wordt gebruikt. Standaard: De AI-Stafchef."
+        }
+      },
+      "gemini": {
+        "title": "AI Coach / Gemini",
+        "description": "Stel de gedeelde Gemini-verbinding in. De API-key wordt alleen gebruikt om korte coachteksten te genereren. Bij een AI-fout wordt het WhatsApp-bericht gewoon zonder coachtekst verstuurd.",
+        "data": {
+          "gemini_api_key": "Gemini API-key",
+          "gemini_model": "Gemini-model"
+        },
+        "data_description": {
+          "gemini_api_key": "Maak bij voorkeur een nieuwe Gemini auth key in Google AI Studio en behandel deze als een wachtwoord.",
+          "gemini_model": "Standaard gemini-3.6-flash. Je kunt dit later wijzigen."
+        }
+      },
+      "team_remove": {
+        "title": "Team verwijderen",
+        "description": "Kies precies één team. De volledige teamnaam en het team-ID worden getoond. Alleen actieve teams kunnen worden verwijderd.",
+        "data": {
+          "team_remove_id": "Team dat je wilt verwijderen"
+        }
+      },
+      "team_remove_confirm": {
+        "title": "⚠️ Team verwijderen?",
+        "description": "Je staat op het punt **{team}** (team-ID: `{team_id}`) uit de actieve HA Voetbal.nl-teamselectie te verwijderen. De overige teams blijven actief. De opgeslagen configuratie van dit team wordt niet automatisch gewist.",
+        "data": {
+          "confirm_remove": "Ja, ik wil dit team verwijderen"
+        }
+      }
+    },
+    "abort": {
+      "not_loaded": "De integratie is niet geladen.",
+      "team_not_found": "Het geselecteerde team is niet gevonden.",
+      "team_removed": "Team verwijderd"
+    },
+    "error": {
+      "invalid_training_override_dates": "Ongeldige datum(s). Gebruik per regel exact DD-MM-JJJJ.",
+      "invalid_present_minutes": "Vul een waarde tussen 0 en 180 minuten in.",
+      "invalid_training_period_dates": "Start- of einddatum is ongeldig. Gebruik DD-MM-JJJJ.",
+      "training_period_end_before_start": "De einddatum moet op of na de startdatum liggen.",
+      "invalid_waha_url": "De WAHA URL is ongeldig. Gebruik http:// of https://.",
+      "missing_waha_api_key": "Vul de WAHA API-key in.",
+      "invalid_webhook_url": "De webhook basis-URL is ongeldig. Gebruik http:// of https://.",
+      "cannot_connect_waha": "Kan geen verbinding maken met WAHA. Controleer URL en API-key.",
+      "no_waha_sessions": "WAHA heeft geen sessies teruggegeven.",
+      "cannot_load_waha_groups": "Kan de WhatsApp-groepen niet ophalen uit WAHA.",
+      "choose_waha_groups": "Kies zowel een testgroep als een productiegroep.",
+      "waha_groups_must_differ": "Testgroep en productiegroep moeten verschillend zijn.",
+      "invalid_poll_time": "Gebruik een geldig tijdstip in UU:MM, bijvoorbeeld 19:00.",
+      "invalid_poll_days": "Aantal dagen moet tussen 0 en 14 liggen.",
+      "reminder_before_poll": "De reminder moet na de poll gepland staan.",
+      "invalid_poll_planning": "De pollplanning is ongeldig.",
+      "no_waha_group_members": "Er konden geen WhatsApp-groepsleden worden opgehaald.",
+      "no_team_people": "Het geselecteerde team heeft geen ingestelde spelers of staf.",
+      "identity_role_person_mismatch": "De gekozen rol komt niet overeen met de gekozen HA-persoon.",
+      "missing_gemini_api_key": "Vul een Gemini API-key in.",
+      "cannot_connect_gemini": "De Gemini API-key of het gekozen model kon niet worden gevalideerd.",
+      "select_team_remove": "Selecteer één team.",
+      "team_not_active": "Dit team is niet actief in de huidige selectie.",
+      "cannot_remove_last_team": "Het laatste actieve team kan niet worden verwijderd. Er moet minimaal één team actief blijven.",
+      "team_not_found": "Het gekozen team kon niet worden gevonden."
+    }
+  },
+  "services": {
+    "genereer_seizoens_pdf": {
+      "name": "Seizoens-PDF genereren",
+      "description": "Genereer een PDF met wedstrijdprogramma, rijschema en volledig trainingsschema voor het gekozen team.",
+      "fields": {
+        "team_id": {
+          "name": "Team-ID",
+          "description": "Het Voetbal.nl team-ID waarvoor de PDF wordt gemaakt."
+        },
+        "bestandsnaam": {
+          "name": "Bestandsnaam",
+          "description": "Optionele PDF-bestandsnaam. Zonder waarde wordt automatisch een naam gemaakt."
+        }
+      }
+    }
+  }
+}

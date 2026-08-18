@@ -1,0 +1,348 @@
+{
+  "title": "HA Voetbal.nl",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Voetbal.nl account",
+        "description": "Sign in with your own Voetbal.nl account.",
+        "data": {
+          "email": "Email address",
+          "password": "Password"
+        }
+      },
+      "club_search": {
+        "title": "Search club",
+        "description": "Enter (part of) a club name. Voetbal.nl searches nationwide.",
+        "data": {
+          "club_query": "Club name"
+        }
+      },
+      "club_select": {
+        "title": "Select club",
+        "description": "Select the correct club.",
+        "data": {
+          "club_id": "Club"
+        }
+      },
+      "team_select": {
+        "title": "Select teams",
+        "description": "Select one or more teams. Duplicate names include match day and competition where available.",
+        "data": {
+          "team_ids": "Teams"
+        }
+      },
+      "reconfigure": {
+        "title": "Manage teams",
+        "description": "Add or remove teams. The integration reloads automatically afterwards.",
+        "data": {
+          "team_ids": "Teams"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Voetbal.nl rejected the login.",
+      "cannot_connect": "Unable to reach Voetbal.nl or retrieve data.",
+      "unknown": "An unknown error occurred.",
+      "no_clubs": "No clubs found for this search.",
+      "no_teams": "No teams found for this club.",
+      "select_team": "Select at least one team."
+    },
+    "abort": {
+      "already_configured": "This club has already been added for this account.",
+      "reconfigure_successful": "Selected teams were updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure HA Voetbal.nl",
+        "description": "Choose what you want to manage. Each option briefly explains what can be configured there.",
+        "data": {
+          "config_section": "Section"
+        }
+      },
+      "players": {
+        "title": "Player management — {team}",
+        "description": "Select visible Voetbal.nl players for your local squad. Hidden players on Voetbal.nl: {hidden}. Add missing players manually, one name per line.",
+        "data": {
+          "selected_players": "Selected players",
+          "manual_players": "Manually added players"
+        },
+        "data_description": {
+          "selected_players": "Choose which visible Voetbal.nl players belong to the local squad.",
+          "manual_players": "Add missing or hidden players manually, one name per line."
+        }
+      },
+      "route": {
+        "title": "Route settings",
+        "description": "Enter one OpenRouteService API key and choose the team whose departure point you want to configure.",
+        "data": {
+          "route_api_key": "OpenRouteService API key",
+          "route_team_id": "Team"
+        }
+      },
+      "route_team": {
+        "title": "Departure point — {team}",
+        "description": "By default the home ground from Voetbal.nl is used: {home}. Choose Custom departure point to use another meeting point.",
+        "data": {
+          "mode": "Departure point",
+          "name": "Custom departure name",
+          "latitude": "Custom departure latitude",
+          "longitude": "Custom departure longitude"
+        }
+      },
+      "driving_team": {
+        "title": "Driving schedule",
+        "description": "Choose the team whose driving schedule you want to configure.",
+        "data": {
+          "driving_team_id": "Team"
+        }
+      },
+      "driving": {
+        "title": "Driving schedule — {team}",
+        "description": "Set the number of cars per away match and exclude players who should not be scheduled as drivers. New away matches are supplemented automatically; the distribution first balances trips and then kilometres.",
+        "data": {
+          "cars_per_away_match": "Cars per away match",
+          "excluded_drivers": "Do not schedule as driver",
+          "add_supplemental_schedule": "Create supplemental schedule for new away matches"
+        },
+        "data_description": {
+          "cars_per_away_match": "Number of drivers/cars automatically scheduled for each away match.",
+          "excluded_drivers": "These players are excluded as drivers for the entire season.",
+          "add_supplemental_schedule": "Manual fallback. New away matches are normally supplemented automatically; existing assignments are preserved."
+        }
+      },
+      "players_team": {
+        "title": "Player management",
+        "description": "Choose the team whose players you want to manage.",
+        "data": {
+          "players_team_id": "Team"
+        }
+      },
+      "training_team": {
+        "title": "Training schedule",
+        "description": "Choose the team whose training schedule you want to manage.",
+        "data": {
+          "training_team_id": "Team"
+        }
+      },
+      "training": {
+        "title": "Training schedule — {team}",
+        "description": "Configure the training schedule start/end dates, sessions, school holidays and holiday overrides for {team}.",
+        "data": {
+          "training_1_day": "Training 1 — day",
+          "training_1_meeting": "Training 1 — meeting time",
+          "training_1_start": "Training 1 — start",
+          "training_1_end": "Training 1 — end",
+          "training_1_field": "Training 1 — field",
+          "training_2_day": "Training 2 — day",
+          "training_2_meeting": "Training 2 — meeting time",
+          "training_2_start": "Training 2 — start",
+          "training_2_end": "Training 2 — end",
+          "training_2_field": "Training 2 — field",
+          "training_3_day": "Training 3 — day",
+          "training_3_meeting": "Training 3 — meeting time",
+          "training_3_start": "Training 3 — start",
+          "training_3_end": "Training 3 — end",
+          "training_3_field": "Training 3 — field",
+          "school_holidays_enabled": "No training during school holidays",
+          "school_holiday_region": "School holiday region",
+          "holiday_training_overrides": "Train during school holiday anyway (DD-MM-YYYY)",
+          "training_schedule_start": "Training schedule start date (DD-MM-YYYY)",
+          "training_schedule_end": "Training schedule end date (DD-MM-YYYY)",
+          "poll_days_before": "Send poll - days before training",
+          "poll_time": "Send poll - time (HH:MM)",
+          "reminder_days_before": "Reminder - days before training",
+          "reminder_time": "Reminder - time (HH:MM)",
+          "production_enabled": "Automatic WhatsApp production for training",
+          "training_info_enabled": "Automatically send training-day message",
+          "training_info_hours_before": "Training-day message - hours before training",
+          "training_weather_enabled": "Add weather forecast to training-day message",
+          "training_attendance_summary_enabled": "Add attendance summary to training-day message",
+          "training_coach_enabled": "Add Gemini coach message to training-day message"
+        },
+        "data_description": {
+          "holiday_training_overrides": "Enter multiple dates, one per line, using DD-MM-YYYY. The normal training continues on these dates even during a school holiday.",
+          "training_schedule_start": "First date included when building the training schedule.",
+          "training_schedule_end": "Last date included when building the training schedule.",
+          "production_enabled": "On: new training polls are sent automatically to the production group. Off: no new production polls are started; existing active polls still complete, including reminder and closure at training start.",
+          "training_info_enabled": "Automatically sends training information to the production group before training.",
+          "training_info_hours_before": "Defaults to 2 hours before training starts.",
+          "training_weather_enabled": "Uses the forecast around training start. Weather failures never block the message.",
+          "training_attendance_summary_enabled": "Adds counts for present, absent, injured and no response.",
+          "training_coach_enabled": "Generates roughly 60 words max. If Gemini fails, the training-day message is still sent without AI text."
+        }
+      },
+      "match_team": {
+        "title": "Match settings",
+        "description": "Choose the team whose match settings you want to manage.",
+        "data": {
+          "match_team_id": "Team"
+        }
+      },
+      "match_settings": {
+        "title": "Match settings — {team}",
+        "description": "Manage settings used for match days. More match-specific options can be added here later.",
+        "data": {
+          "match_present_minutes": "Minutes before match to be present"
+        },
+        "data_description": {
+          "match_present_minutes": "Default is 45 minutes. For home matches it is subtracted from kickoff time; for away matches travel time is also subtracted."
+        }
+      },
+      "whatsapp_start": {
+        "title": "WhatsApp / WAHA",
+        "description": "Manage the WAHA connection or map WhatsApp groups to a football team.",
+        "data": {
+          "waha_action": "What do you want to manage?"
+        }
+      },
+      "whatsapp_connection": {
+        "title": "WAHA connection",
+        "description": "Enter the WAHA connection. It will be tested; no WhatsApp message is sent yet.",
+        "data": {
+          "base_url": "WAHA URL",
+          "api_key": "WAHA API key",
+          "webhook_base_url": "Home Assistant webhook base URL",
+          "webhook_local_only": "Allow webhook locally only"
+        }
+      },
+      "whatsapp_session": {
+        "title": "WAHA session",
+        "description": "Select the active WhatsApp session. Groups will then be loaded.",
+        "data": {
+          "session": "WAHA session"
+        }
+      },
+      "whatsapp_load_groups": {
+        "title": "Load WhatsApp groups",
+        "description": "Groups could not be loaded. Check the WAHA connection and try again.",
+        "data": {}
+      },
+      "whatsapp_team": {
+        "title": "Map WhatsApp groups",
+        "description": "Choose the football team for which you want to configure test and production groups.",
+        "data": {
+          "whatsapp_team_id": "Football team"
+        }
+      },
+      "whatsapp_identity_start": {
+        "title": "Refresh WhatsApp matching",
+        "description": "WhatsApp groups and their members are refreshed from WAHA before you create a mapping.",
+        "data": {}
+      },
+      "whatsapp_identity_team": {
+        "title": "WhatsApp matching — team",
+        "description": "Choose the HA/Voetbal.nl team for this WhatsApp identity mapping.",
+        "data": {
+          "whatsapp_identity_team_id": "Team"
+        }
+      },
+      "whatsapp_identity_group": {
+        "title": "WhatsApp matching — group",
+        "description": "Choose the WhatsApp group and whether this mapping is for production or test. The member list is refreshed now.",
+        "data": {
+          "whatsapp_identity_group_id": "WhatsApp group",
+          "whatsapp_identity_environment": "Environment"
+        }
+      },
+      "whatsapp_identity_mapping": {
+        "title": "WhatsApp matching — {team}",
+        "description": "Team: {team} · Group: {group}. Overview: {members}. All mappings are shown below. Set HA name ↔ WhatsApp name, type and Production/Test per person.",
+        "data": {
+          "whatsapp_identity_wa_id": "WhatsApp contact",
+          "whatsapp_identity_person": "HA person",
+          "whatsapp_identity_role": "Role"
+        },
+        "data_description": {
+          "whatsapp_identity_wa_id": "Select the WhatsApp contact exactly as WAHA reports it. The WA-ID is stored with the mapping.",
+          "whatsapp_identity_person": "Select the person from the selected HA team.",
+          "whatsapp_identity_role": "Choose Speler or Staf. The role must match the selected HA person."
+        }
+      },
+      "whatsapp_groups": {
+        "title": "WhatsApp groups for {team}",
+        "description": "Choose test and production groups and configure per team when the attendance poll and reminder are sent.",
+        "data": {
+          "test_group_id": "Test group",
+          "prod_group_id": "Production group",
+          "poll_days_before": "Send poll - days before match",
+          "poll_time": "Send poll - time (HH:MM)",
+          "reminder_days_before": "Reminder - days before match",
+          "reminder_time": "Reminder - time (HH:MM)",
+          "production_enabled": "Automatic WhatsApp production for matches",
+          "matchday_message_enabled": "Automatically send matchday message",
+          "matchday_message_time": "Matchday message - time (HH:MM)",
+          "matchday_weather_enabled": "Add weather forecast to matchday message",
+          "matchday_coach_enabled": "Add Gemini coach message to matchday message",
+          "assistant_name": "Digital staff assistant name"
+        },
+        "data_description": {
+          "production_enabled": "On: new match polls are sent automatically to the production group. Off: no new production polls are started; existing active polls still complete, including reminder and closure at kickoff.",
+          "matchday_message_enabled": "Automatically sends match information to the production group on matchday.",
+          "matchday_message_time": "Defaults to 09:00 on matchday.",
+          "matchday_weather_enabled": "Uses the forecast around kickoff at the match location. Weather failures never block the message.",
+          "matchday_coach_enabled": "Generates roughly 60 words max. If Gemini fails, the matchday message is still sent without AI text.",
+          "assistant_name": "Name used at the bottom of WhatsApp messages for this team. Default: De AI-Stafchef."
+        }
+      },
+      "gemini": {
+        "title": "AI Coach / Gemini",
+        "description": "Configure the shared Gemini connection. The API key is used only to generate short coach messages. If AI fails, the WhatsApp message is still sent without coach text.",
+        "data": {
+          "gemini_api_key": "Gemini API key",
+          "gemini_model": "Gemini model"
+        },
+        "data_description": {
+          "gemini_api_key": "Prefer a new Gemini auth key from Google AI Studio and treat it like a password.",
+          "gemini_model": "Defaults to gemini-3.6-flash; you can change it later."
+        }
+      },
+      "team_remove": {
+        "title": "Remove team",
+        "description": "Choose exactly one team. The full team name and team ID are shown. Only active teams can be removed.",
+        "data": {
+          "team_remove_id": "Team to remove"
+        }
+      },
+      "team_remove_confirm": {
+        "title": "⚠️ Remove team?",
+        "description": "You are about to remove **{team}** (team ID: `{team_id}`) from the active HA Voetbal.nl team selection. The other teams remain active. Saved configuration for this team is not automatically deleted.",
+        "data": {
+          "confirm_remove": "Yes, remove this team"
+        }
+      }
+    },
+    "abort": {
+      "not_loaded": "The integration is not loaded.",
+      "team_not_found": "The selected team was not found.",
+      "team_removed": "Team removed"
+    },
+    "error": {
+      "invalid_training_override_dates": "Invalid date(s). Use exactly DD-MM-YYYY, one date per line.",
+      "invalid_training_period_dates": "The training start or end date is invalid. Use DD-MM-YYYY.",
+      "training_period_end_before_start": "The end date must be on or after the start date.",
+      "invalid_waha_url": "The WAHA URL is invalid. Use http:// or https://.",
+      "missing_waha_api_key": "Enter the WAHA API key.",
+      "invalid_webhook_url": "The webhook base URL is invalid. Use http:// or https://.",
+      "cannot_connect_waha": "Cannot connect to WAHA. Check URL and API key.",
+      "no_waha_sessions": "WAHA returned no sessions.",
+      "cannot_load_waha_groups": "Cannot load WhatsApp groups from WAHA.",
+      "choose_waha_groups": "Choose both a test group and a production group.",
+      "waha_groups_must_differ": "Test group and production group must be different.",
+      "invalid_poll_time": "Use a valid time in HH:MM format, for example 19:00.",
+      "invalid_poll_days": "Days must be between 0 and 14.",
+      "reminder_before_poll": "The reminder must be scheduled after the poll.",
+      "invalid_poll_planning": "The poll schedule is invalid.",
+      "no_waha_group_members": "No WhatsApp members could be loaded for this group.",
+      "no_team_people": "The selected team has no configured players or staff.",
+      "identity_role_person_mismatch": "The selected role does not match the selected HA person.",
+      "missing_gemini_api_key": "Enter a Gemini API key.",
+      "cannot_connect_gemini": "The Gemini API key or selected model could not be validated.",
+      "select_team_remove": "Select one team.",
+      "team_not_active": "This team is not active in the current selection.",
+      "cannot_remove_last_team": "The last active team cannot be removed. At least one team must remain active.",
+      "team_not_found": "The selected team could not be found."
+    }
+  }
+}

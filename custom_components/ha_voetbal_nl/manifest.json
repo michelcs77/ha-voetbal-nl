@@ -1,0 +1,9 @@
+{
+  "domain": "ha_voetbal_nl",
+  "name": "HA Voetbal.nl",
+  "version": "0.10.0",
+  "config_flow": true,
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": []
+}
