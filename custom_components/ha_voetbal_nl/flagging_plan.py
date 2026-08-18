@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import itertools
 from homeassistant.helpers.storage import Store
+from .driving import can_drive_on_date
 
 STORAGE_VERSION = 1
 
@@ -52,8 +53,21 @@ def _all_people(team_data):
     return out
 
 def eligible_flaggers(team_data, match, driving_plan=None):
-    excluded={str(x).strip().casefold() for x in getattr(team_data,"flagging_excluded",[]) if str(x).strip()}
-    people=[n for n in _all_people(team_data) if n.casefold() not in excluded]
+    allowed={str(x).strip().casefold() for x in getattr(team_data,"flagging_allowed",[]) if str(x).strip()}
+    extra={str(x).strip().casefold() for x in getattr(team_data,"flagging_extra",[]) if str(x).strip()}
+    people=[n for n in _all_people(team_data) if n.casefold() in (allowed | extra)]
+
+    # Driving availability is the base eligibility for flagging. A person
+    # who is permanently excluded from driving or temporarily unavailable
+    # on this match date must never be scheduled as a flagger either.
+    people=[
+        n for n in people
+        if can_drive_on_date(team_data, n, match.date_iso or "")
+    ]
+
+    # For away matches, the selected flagger must also be one of the drivers
+    # actually assigned to that specific match. Home matches do not require
+    # an assigned driver.
     if match.is_home is False and driving_plan is not None:
         drivers=driving_plan.status_for_match(team_data, match).get("chauffeurs",[])
         d={x.casefold() for x in drivers}
@@ -62,7 +76,9 @@ def eligible_flaggers(team_data, match, driving_plan=None):
 
 def rebuild_flagging_schedule(team_data, driving_plan=None):
     matches=sorted(team_data.matches,key=lambda m:(m.date_iso or "9999-99-99",m.time or "99:99",m.match_id))
-    counts={n:0 for n in _all_people(team_data) if n.casefold() not in {x.casefold() for x in team_data.flagging_excluded}}
+    allowed = {x.casefold() for x in getattr(team_data, "flagging_allowed", [])}
+    extra = {x.casefold() for x in getattr(team_data, "flagging_extra", [])}
+    counts={n:0 for n in _all_people(team_data) if n.casefold() in (allowed | extra)}
     output={}; warnings=[]
     for match in matches:
         candidates=eligible_flaggers(team_data,match,driving_plan)

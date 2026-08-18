@@ -100,16 +100,18 @@
       },
       "driving": {
         "title": "Driving schedule — {team}",
-        "description": "Set the number of cars per away match and exclude players who should not be scheduled as drivers. New away matches are supplemented automatically; the distribution first balances trips and then kilometres.",
+        "description": "Set cars per away match, exclude permanent drivers, and add date-specific driver unavailability. The planner first balances trips and then kilometres.",
         "data": {
           "cars_per_away_match": "Cars per away match",
           "excluded_drivers": "Do not schedule as driver",
-          "add_supplemental_schedule": "Create supplemental schedule for new away matches"
+          "add_supplemental_schedule": "Create supplemental schedule for new away matches",
+          "temporary_driver_unavailability": "🚫 Temporary driver unavailability"
         },
         "data_description": {
           "cars_per_away_match": "Number of drivers/cars automatically scheduled for each away match.",
           "excluded_drivers": "These players are excluded as drivers for the entire season.",
-          "add_supplemental_schedule": "Manual fallback. New away matches are normally supplemented automatically; existing assignments are preserved."
+          "add_supplemental_schedule": "Manual fallback. New away matches are normally supplemented automatically; existing assignments are preserved.",
+          "temporary_driver_unavailability": "Enter player and date as Name | DD-MM-YYYY. The player is unavailable as a driver only on that date. Separate multiple entries with semicolons."
         }
       },
       "players_team": {
@@ -262,7 +264,7 @@
       },
       "whatsapp_groups": {
         "title": "WhatsApp groups for {team}",
-        "description": "Choose test and production groups and configure per team when the attendance poll and reminder are sent.",
+        "description": "Choose the test and production group and decide per team whether WhatsApp uses attendance polls or information messages only.",
         "data": {
           "test_group_id": "Test group",
           "prod_group_id": "Production group",
@@ -275,7 +277,8 @@
           "matchday_message_time": "Matchday message - time (HH:MM)",
           "matchday_weather_enabled": "Add weather forecast to matchday message",
           "matchday_coach_enabled": "Add Gemini coach message to matchday message",
-          "assistant_name": "Digital staff assistant name"
+          "assistant_name": "Digital staff assistant name",
+          "attendance_mode": "WhatsApp mode for this team"
         },
         "data_description": {
           "production_enabled": "On: new match polls are sent automatically to the production group. Off: no new production polls are started; existing active polls still complete, including reminder and closure at kickoff.",
@@ -283,7 +286,8 @@
           "matchday_message_time": "Defaults to 09:00 on matchday.",
           "matchday_weather_enabled": "Uses the forecast around kickoff at the match location. Weather failures never block the message.",
           "matchday_coach_enabled": "Generates roughly 60 words max. If Gemini fails, the matchday message is still sent without AI text.",
-          "assistant_name": "Name used at the bottom of WhatsApp messages for this team. Default: De AI-Stafchef."
+          "assistant_name": "Name used at the bottom of WhatsApp messages for this team. Default: De AI-Stafchef.",
+          "attendance_mode": "Messages + polls: attendance polls and reminders stay active. Messages only (no polls): no attendance polls or poll reminders are sent; the existing match and training information messages remain active."
         }
       },
       "gemini": {
@@ -310,6 +314,24 @@
         "description": "You are about to remove **{team}** (team ID: `{team_id}`) from the active HA Voetbal.nl team selection. The other teams remain active. Saved configuration for this team is not automatically deleted.",
         "data": {
           "confirm_remove": "Yes, remove this team"
+        }
+      },
+      "match_tasks": {
+        "title": "Match tasks — {team}",
+        "description": "Configure whether an assistant referee/flagger is required for this team. Select only the people who are allowed to flag. People who are not selected will not be scheduled as flagger. For away matches, the flagger must also be assigned as a driver. This planning is completely independent from the attendance poll.",
+        "data": {
+          "enabled": "🚩 Use flagger planning",
+          "flaggers": "🚩 Select flaggers",
+          "extra_flaggers": "➕ Extra flaggers",
+          "extra_flaggers_manual": "➕ Extra flaggers manually",
+          "rebuild_match_tasks": "🔄 Recalculate driving schedule and flaggers"
+        },
+        "data_description": {
+          "enabled": "On: plan an assistant referee/flagger for this team. Off: flagger planning is not used for this team.",
+          "flaggers": "Select only people who are allowed to flag. ☑ Selected = may flag. Not selected = may NOT flag and is not used by the planner.",
+          "extra_flaggers": "Optionally select additional people who may flag.",
+          "extra_flaggers_manual": "Add people who are not in the player/staff list. Separate multiple names with commas or semicolons.",
+          "rebuild_match_tasks": "Only enable this when you deliberately want to rebuild the existing match planning for this team. Existing driving and flagger assignments for this team will be replaced and recalculated. The attendance poll has no influence on this."
         }
       }
     },

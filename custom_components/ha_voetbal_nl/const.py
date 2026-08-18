@@ -47,11 +47,13 @@ CONF_MATCH_MANAGEMENT = "match_management"
 CONF_DRIVING_ADD_SUPPLEMENT = "add_supplemental_schedule"
 CONF_DRIVING_EXTRA_DRIVERS = "extra_drivers"
 CONF_DRIVING_EXTRA_MANUAL = "extra_drivers_manual"
+# v0.10.3: per-match temporary driver unavailability
+CONF_DRIVING_UNAVAILABLE = "temporary_driver_unavailability"
 
 # v0.10.0: optional assistant-referee/flagger planning per team
 CONF_FLAGGING_MANAGEMENT = "flagging_management"
 CONF_FLAGGING_ENABLED = "enabled"
-CONF_FLAGGING_EXCLUDED = "excluded_flaggers"
+CONF_FLAGGING_ALLOWED = "flaggers"
 CONF_FLAGGING_EXTRA = "extra_flaggers"
 CONF_FLAGGING_EXTRA_MANUAL = "extra_flaggers_manual"
 CONF_FLAGGING_REBUILD = "rebuild_match_tasks"
@@ -77,6 +79,11 @@ CONF_WAHA_PROD_GROUP_ID = "prod_group_id"
 CONF_WAHA_PROD_GROUP_NAME = "prod_group_name"
 CONF_WAHA_ASSISTANT_NAME = "assistant_name"
 CONF_WAHA_IDENTITY_MAPPINGS = "identity_mappings"
+# v0.10.9: per-team WhatsApp attendance communication mode
+CONF_WAHA_ATTENDANCE_MODE = "attendance_mode"
+WAHA_ATTENDANCE_MODE_POLLS = "polls"
+WAHA_ATTENDANCE_MODE_MESSAGES = "messages"
+DEFAULT_WAHA_ATTENDANCE_MODE = WAHA_ATTENDANCE_MODE_POLLS
 
 SERVICE_SEND_ATTENDANCE_POLL = "verstuur_aanwezigheidspoll"
 ATTR_TEST_MODE = "testmodus"

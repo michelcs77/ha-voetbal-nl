@@ -33,7 +33,7 @@ def _subtract_minutes(time_value, minutes):
         return None
 
 
-def build_season_export(team_data, driving_plan):
+def build_season_export(team_data, driving_plan, flagging_plan=None):
     """Canonical season structure for future PDF/export functionality."""
     matches = []
     per_person = {}
@@ -43,6 +43,11 @@ def build_season_export(team_data, driving_plan):
         key=lambda m: (m.date_iso or "9999-99-99", m.time or "99:99"),
     ):
         plan = driving_plan.status_for_match(team_data, match)
+        flag = (
+            flagging_plan.status_for_match(team_data, match, driving_plan)
+            if flagging_plan is not None
+            else {"vereist": False, "status": "niet_van_toepassing", "vlagger": "", "kandidaten": []}
+        )
         week = _week_number(match.date_iso)
         match_label = f"{match.home_team} - {match.away_team}".strip(" -")
         reistijd = match.route.reistijd_minuten if match.is_home is False else 0
@@ -73,6 +78,9 @@ def build_season_export(team_data, driving_plan):
             "afstand_enkel_km": match.route.afstand_enkel_km if match.is_home is False else 0,
             "afstand_retour_km": match.route.afstand_retour_km if match.is_home is False else 0,
             "rijschema": plan,
+            "vlagger": flag.get("vlagger", ""),
+            "vlagger_status": flag.get("status", "niet_van_toepassing"),
+            "vlaggen_verplicht": flag.get("vereist", False),
         }
         matches.append(row)
 
@@ -101,6 +109,43 @@ def build_season_export(team_data, driving_plan):
         for name, rows in sorted(per_person.items(), key=lambda item: item[0].casefold())
     ]
 
+    vlagger_per_persoon = {}
+    if flagging_plan is not None and getattr(team_data, "flagging_enabled", False):
+        # Start with every configured flagger so the PDF also shows people
+        # who are configured as available but currently have zero assignments.
+        configured_flaggers = []
+        seen_flaggers = set()
+        for raw in list(getattr(team_data, "flagging_allowed", [])) + list(getattr(team_data, "flagging_extra", [])):
+            name = " ".join(str(raw).split())
+            key = name.casefold()
+            if name and key not in seen_flaggers:
+                seen_flaggers.add(key)
+                configured_flaggers.append(name)
+                vlagger_per_persoon[name] = []
+
+        for row in matches:
+            name = str(row.get("vlagger") or "").strip()
+            if not name or row.get("vlagger_status") != "geregeld":
+                continue
+            # Preserve the configured spelling when possible.
+            canonical = next((n for n in configured_flaggers if n.casefold() == name.casefold()), name)
+            vlagger_per_persoon.setdefault(canonical, []).append({
+                "week": row.get("week"),
+                "weeknummer": row.get("weeknummer"),
+                "datum": row.get("datum"),
+                "datum_iso": row.get("datum_iso"),
+                "tijd": row.get("tijd"),
+                "wedstrijd": row.get("wedstrijd"),
+                "tegenstander": row.get("tegenstander"),
+                "thuiswedstrijd": row.get("thuiswedstrijd"),
+                "tegenstander_logo_url": row.get("tegenstander_logo_url"),
+            })
+
+    vlaggers = [
+        {"speler": name, "wedstrijden": rows, "aantal_wedstrijden": len(rows)}
+        for name, rows in sorted(vlagger_per_persoon.items(), key=lambda item: item[0].casefold())
+    ]
+
     team_logo_url = team_data.team.logo_url
     if not team_logo_url:
         for match in team_data.matches:
@@ -118,6 +163,8 @@ def build_season_export(team_data, driving_plan):
         "seizoen": team_data.training_season,
         "wedstrijden": matches,
         "rijschema_per_persoon": people,
+        "vlagger_per_persoon": vlaggers,
+        "vlaggen_ingeschakeld": bool(getattr(team_data, "flagging_enabled", False)),
         # Full training calendar intentionally remains internal; this is exactly
         # what the later PDF generator can consume without Home Assistant's
         # 16KB state-attribute limitation.

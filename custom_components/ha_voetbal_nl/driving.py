@@ -103,7 +103,7 @@ def _choose_drivers_for_match(
     return list(best_combo or ranked[:needed])
 
 
-def _improve_by_swaps(schedule, stats, eligible, min_target, max_target):
+def _improve_by_swaps(schedule, stats, eligible, min_target, max_target, team_data):
     """Local improvement pass: swap drivers between matches to reduce km spread."""
     improved = True
     iterations = 0
@@ -127,6 +127,12 @@ def _improve_by_swaps(schedule, stats, eligible, min_target, max_target):
                 for a in list(drivers_a):
                     for b in list(drivers_b):
                         if a == b:
+                            continue
+                        # Never swap a driver onto a date on which they are
+                        # temporarily unavailable.
+                        if _is_temporarily_unavailable(team_data, b, match_a.get("datum", "")):
+                            continue
+                        if _is_temporarily_unavailable(team_data, a, match_b.get("datum", "")):
                             continue
                         if b in drivers_a or a in drivers_b:
                             continue
@@ -160,6 +166,51 @@ def _improve_by_swaps(schedule, stats, eligible, min_target, max_target):
                 break
 
 
+
+def _temporary_unavailability(team_data):
+    out = {}
+    for item in getattr(team_data, "driving_unavailable_dates", []) or []:
+        if isinstance(item, dict):
+            name = " ".join(str(item.get("name", "")).split())
+            date_iso = str(item.get("date", "")).strip()
+            if name and date_iso:
+                out.setdefault(name.casefold(), set()).add(date_iso)
+    return out
+
+
+def _is_temporarily_unavailable(team_data, name, date_iso):
+    return date_iso in _temporary_unavailability(team_data).get(name.casefold(), set())
+
+def can_drive_on_date(team_data, name, date_iso):
+    """Return whether *name* is eligible to drive for the team on a date.
+
+    Driving availability is the base availability for flagging as well: a
+    person who cannot drive on a particular match date must not be selected
+    as a flagger on that date either.
+    """
+    normalized = " ".join(str(name).split())
+    if not normalized:
+        return False
+
+    squad = _unique_names(
+        list(team_data.selected_players)
+        + list(team_data.manual_players)
+        + list(getattr(team_data, "driving_extra", []))
+    )
+    key = normalized.casefold()
+    if key not in {n.casefold() for n in squad}:
+        return False
+
+    excluded = {
+        " ".join(str(value).split()).casefold()
+        for value in getattr(team_data, "driving_excluded", []) or []
+        if str(value).strip()
+    }
+    if key in excluded:
+        return False
+
+    return not _is_temporarily_unavailable(team_data, normalized, date_iso or "")
+
 def build_driving_schedule(team_data):
     """Build a deterministic season-wide fair driving schedule.
 
@@ -179,6 +230,7 @@ def build_driving_schedule(team_data):
     eligible = [n for n in squad if n.casefold() not in excluded_keys]
     excluded = [n for n in squad if n.casefold() in excluded_keys]
     cars = max(1, int(team_data.driving_cars or 1))
+    unavailable = _temporary_unavailability(team_data)
 
     matches = sorted(
         (m for m in team_data.matches if m.is_home is False),
@@ -190,14 +242,8 @@ def build_driving_schedule(team_data):
     )
 
     total_assignments = len(matches) * min(cars, len(eligible))
-    min_target = (
-        total_assignments // len(eligible)
-        if eligible else 0
-    )
-    max_target = (
-        math.ceil(total_assignments / len(eligible))
-        if eligible else 0
-    )
+    min_target = total_assignments // len(eligible) if eligible else 0
+    max_target = math.ceil(total_assignments / len(eligible)) if eligible else 0
 
     stats = {
         n: {
@@ -213,18 +259,22 @@ def build_driving_schedule(team_data):
     warnings = []
 
     for idx, match in enumerate(matches):
-        needed = min(cars, len(eligible))
+        match_eligible = [
+            n for n in eligible
+            if match.date_iso not in unavailable.get(n.casefold(), set())
+        ]
+        needed = min(cars, len(match_eligible))
 
-        if len(eligible) < cars:
+        if len(match_eligible) < cars:
             warnings.append(
                 f"{match.date_iso or match.date_text}: {cars} auto's gevraagd, "
-                f"maar slechts {len(eligible)} beschikbare chauffeurs."
+                f"maar slechts {len(match_eligible)} beschikbare chauffeurs op deze datum."
             )
 
         km = float(match.route.afstand_retour_km or 0.0)
 
         drivers = _choose_drivers_for_match(
-            eligible,
+            match_eligible,
             stats,
             needed,
             km,
@@ -257,6 +307,7 @@ def build_driving_schedule(team_data):
             eligible,
             min_target,
             max_target,
+            team_data,
         )
 
     kms = [stats[name]["kilometers"] for name in eligible]
@@ -283,6 +334,7 @@ def build_driving_schedule(team_data):
         "spelers": squad,
         "beschikbare_chauffeurs": eligible,
         "uitgesloten_chauffeurs": excluded,
+        "tijdelijke_rijbeperkingen": [dict(x) for x in (getattr(team_data, "driving_unavailable_dates", []) or [])],
         "autos_per_uitwedstrijd": cars,
         "schema": schedule,
         "verdeling": verdeling,

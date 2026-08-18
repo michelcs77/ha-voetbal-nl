@@ -99,7 +99,7 @@ Verwijder eerst wachtwoorden, API-keys, cookies, tokens, telefoonnummers, WhatsA
 
 ## Versie
 
-Huidige release: **0.10.0**. Zie [CHANGELOG.md](CHANGELOG.md) voor de wijzigingen.
+Huidige release: **0.10.10**. Zie [CHANGELOG.md](CHANGELOG.md) voor de wijzigingen.
 
 ## Licentie
 

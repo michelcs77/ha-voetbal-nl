@@ -65,27 +65,81 @@ class VoetbalNlCoordinator(DataUpdateCoordinator):
         return len(missing)
 
     async def async_rebuild_match_tasks(self, team_id):
-        """Explicitly rebuild driving and flagger plans for one team."""
+        """Fully rebuild driving first, then flaggers, for one team.
+
+        This is an explicit destructive rebuild for the selected team only:
+        existing driver/flagger assignments for that team are discarded and
+        recreated from the current configuration. The coordinator is updated
+        immediately afterwards so HA sensors show the new plan without waiting
+        for the next six-hour refresh.
+        """
         if self.data is None or self.driving_plan is None or self.flagging_plan is None:
             return False
-        team_data = next((x for x in self.data.teams if x.team.team_id == team_id), None)
+
+        team_data = next(
+            (x for x in self.data.teams if x.team.team_id == team_id),
+            None,
+        )
         if team_data is None:
             return False
+
+        # 1) Completely discard the old driving plan for this team.
         self.driving_plan.clear_team(team_id)
+
+        # 2) Build a fresh season-wide driving schedule from the CURRENT team
+        # configuration. This deliberately does not preserve old assignments.
         initial = build_driving_schedule(team_data)
-        by_id = {item["wedstrijd_id"]: item for item in initial.get("schema", [])}
+        by_id = {
+            item["wedstrijd_id"]: item
+            for item in initial.get("schema", [])
+        }
+
         for match in team_data.matches:
-            if match.is_home is False:
-                row=by_id.get(match.match_id,{})
-                self.driving_plan.set_assignment(team_id, match.match_id, row.get("chauffeurs",[]), team_data.driving_cars, source="herberekend")
+            if match.is_home is not False:
+                continue
+            row = by_id.get(match.match_id, {})
+            drivers = list(dict.fromkeys(row.get("chauffeurs", [])))
+            needed = max(1, int(team_data.driving_cars or 1))
+
+            # The builder should always produce the requested number when
+            # enough eligible drivers exist. Keep the stored assignment clean
+            # and never persist an incomplete list merely because an old plan
+            # existed.
+            self.driving_plan.set_assignment(
+                team_id,
+                match.match_id,
+                drivers,
+                needed,
+                source="herberekend",
+            )
+
         self.driving_plan.set_initialized(team_id, True)
+
+        # 3) Only after the new driving plan exists, rebuild flaggers. For an
+        # away match the flagger planner can therefore enforce the rule:
+        # selected flagger AND driver. Home matches do not require a driver.
         self.flagging_plan.clear_team(team_id)
         if team_data.flagging_enabled:
-            assignments,_=rebuild_flagging_schedule(team_data,self.driving_plan)
+            assignments, _warnings = rebuild_flagging_schedule(
+                team_data,
+                self.driving_plan,
+            )
             for match in team_data.matches:
-                self.flagging_plan.set_assignment(team_id,match.match_id,assignments.get(match.match_id,""),source="herberekend")
+                self.flagging_plan.set_assignment(
+                    team_id,
+                    match.match_id,
+                    assignments.get(match.match_id, ""),
+                    source="herberekend",
+                )
             self.flagging_plan.set_initialized(team_id, True)
-        await self.driving_plan.async_save(); await self.flagging_plan.async_save()
+
+        await self.driving_plan.async_save()
+        await self.flagging_plan.async_save()
+
+        # 4) Immediately refresh all HA entities. Without this, the persisted
+        # rebuild can be correct while the dashboard continues showing the old
+        # coordinator data until the next scheduled refresh.
+        self.async_set_updated_data(self.data)
         return True
 
     async def _async_update_data(self):
@@ -253,10 +307,11 @@ class VoetbalNlCoordinator(DataUpdateCoordinator):
                 team_data.driving_extra = list(dict.fromkeys(
                     name.strip() for name in drive_cfg.get("extra_drivers", []) if str(name).strip()
                 ))
+                team_data.driving_unavailable_dates = list(drive_cfg.get("temporary_driver_unavailability", []))
                 flag_cfg = self.local_config.get("flagging_management", {}).get(team_data.team.team_id, {})
                 team_data.flagging_enabled = bool(flag_cfg.get("enabled", False))
-                team_data.flagging_excluded = list(dict.fromkeys(
-                    name.strip() for name in flag_cfg.get("excluded", []) if str(name).strip()
+                team_data.flagging_allowed = list(dict.fromkeys(
+                    name.strip() for name in flag_cfg.get("flaggers", []) if str(name).strip()
                 ))
                 team_data.flagging_extra = list(dict.fromkeys(
                     name.strip() for name in flag_cfg.get("extra", []) if str(name).strip()
@@ -471,6 +526,7 @@ class VoetbalNlCoordinator(DataUpdateCoordinator):
                     team_data.season_export_data = build_season_export(
                         team_data,
                         self.driving_plan,
+                        self.flagging_plan,
                     )
 
                 if driving_plan_changed:

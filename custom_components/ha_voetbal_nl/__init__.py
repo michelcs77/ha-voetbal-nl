@@ -65,6 +65,7 @@ from .const import (
     ATTR_SCHEDULER_PHASE,
     ATTR_MATCH_ID,
     CONF_WAHA_POLL_DAYS_BEFORE,
+    CONF_WAHA_ATTENDANCE_MODE, WAHA_ATTENDANCE_MODE_POLLS, WAHA_ATTENDANCE_MODE_MESSAGES, DEFAULT_WAHA_ATTENDANCE_MODE,
     CONF_WAHA_POLL_TIME,
     CONF_WAHA_REMINDER_DAYS_BEFORE,
     CONF_WAHA_REMINDER_TIME,
@@ -739,6 +740,21 @@ async def _build_matchday_message(coordinator, team_data, match, weather_enabled
                         label = "afwezig" if item.get("status") == "afwezig" else "geblesseerd"
                         lines.append(f"• {item.get('naam')} — {label} maar als chauffeur ingepland")
                     lines.append("Graag zelf actie ondernemen of vervanging regelen. Het rijschema is niet aangepast.")
+
+    # v0.10.10: include the assigned assistant referee/flagger in matchday
+    # messages only when flagging is enabled for this team. Training messages
+    # are intentionally unchanged because a flagger is a match task.
+    if getattr(team_data, "flagging_enabled", False) and getattr(coordinator, "flagging_plan", None) is not None:
+        flag_status = coordinator.flagging_plan.status_for_match(
+            team_data, match, coordinator.driving_plan
+        )
+        lines += ["", "🚩 VLAGGER"]
+        if flag_status.get("status") == "geregeld" and flag_status.get("vlagger"):
+            lines.append(f"• {flag_status.get('vlagger')}")
+        elif flag_status.get("status") == "conflict" and flag_status.get("vlagger"):
+            lines.append(f"• {flag_status.get('vlagger')} — ⚠️ controle nodig")
+        else:
+            lines.append("• ❌ Nog niet geregeld")
     coach_text = None
     if coach_enabled:
         coach_text = await _generate_coach_text(coordinator, _coach_prompt_match(team_data, match, weather, summary))
@@ -842,12 +858,15 @@ async def _send_training_info(coordinator, team_data, item: dict, test_mode: boo
     key = f"traininginfo:{team_data.team.team_id}:{tid}:{'test' if test_mode else 'prod'}"
     if not force and store.message_sent(key):
         return {"bericht_verzonden": False, "al_verzonden": True, "groep_naam": group_name}
+    waha_team_cfg = ((coordinator.waha_config.get(CONF_WAHA_TEAMS) or {}).get(team_data.team.team_id, {}) or {})
+    attendance_mode = str(waha_team_cfg.get(CONF_WAHA_ATTENDANCE_MODE, DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
+    attendance_summary_enabled = bool(cfg.get(CONF_TRAINING_ATTENDANCE_SUMMARY_ENABLED, True)) and attendance_mode == WAHA_ATTENDANCE_MODE_POLLS
     message, weather, coach_text = await _build_training_info_message(
         coordinator,
         team_data,
         item,
         bool(cfg.get(CONF_TRAINING_WEATHER_ENABLED, True)),
-        bool(cfg.get(CONF_TRAINING_ATTENDANCE_SUMMARY_ENABLED, True)),
+        attendance_summary_enabled,
         bool(cfg.get(CONF_TRAINING_COACH_ENABLED, False)),
         test_mode,
     )
@@ -1013,7 +1032,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         # Rebuild from live team data so newly changed rijschema assignments
         # are always reflected in the PDF.
-        export = build_season_export(team_data, coordinator.driving_plan)
+        export = build_season_export(team_data, coordinator.driving_plan, coordinator.flagging_plan)
         team_data.season_export_data = export
         if not export:
             raise HomeAssistantError("Er is nog geen seizoensdata beschikbaar voor dit team.")
@@ -1072,7 +1091,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         # Rebuild from live team data so newly changed rijschema assignments
         # are always reflected in the PDF.
-        export = build_season_export(team_data, coordinator.driving_plan)
+        export = build_season_export(team_data, coordinator.driving_plan, coordinator.flagging_plan)
         team_data.season_export_data = export
         if not export:
             raise HomeAssistantError(
@@ -1202,6 +1221,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         attendance_store = getattr(coordinator, "attendance_store", None)
         waha_cfg = getattr(coordinator, "waha_config", {}) or {}
         team_cfg = (waha_cfg.get(CONF_WAHA_TEAMS) or {}).get(team_id, {})
+        attendance_mode = str(team_cfg.get(CONF_WAHA_ATTENDANCE_MODE, DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
+        if attendance_mode != WAHA_ATTENDANCE_MODE_POLLS:
+            raise HomeAssistantError("Voor dit team staat WhatsApp op alleen berichten. Een aanwezigheidspoll is uitgeschakeld.")
         if waha_client is None or attendance_store is None:
             raise HomeAssistantError("WAHA is nog niet geconfigureerd voor deze integratie.")
 
@@ -1646,6 +1668,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         coordinator,td=await _training_context(team_id); client=coordinator.waha_client; store=coordinator.attendance_store
         if client is None: raise HomeAssistantError("WAHA is nog niet geconfigureerd voor deze integratie.")
         team_cfg=(coordinator.waha_config.get(CONF_WAHA_TEAMS) or {}).get(team_id,{})
+        attendance_mode=str(team_cfg.get(CONF_WAHA_ATTENDANCE_MODE,DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
+        if attendance_mode != WAHA_ATTENDANCE_MODE_POLLS:
+            raise HomeAssistantError("Voor dit team staat WhatsApp op alleen berichten. Een trainingspoll is uitgeschakeld.")
         gid=str(team_cfg.get(CONF_WAHA_TEST_GROUP_ID if test_mode else CONF_WAHA_PROD_GROUP_ID) or "").strip()
         gname=str(team_cfg.get(CONF_WAHA_TEST_GROUP_NAME if test_mode else CONF_WAHA_PROD_GROUP_NAME) or "").strip()
         prod=str(team_cfg.get(CONF_WAHA_PROD_GROUP_ID) or "").strip(); test=str(team_cfg.get(CONF_WAHA_TEST_GROUP_ID) or "").strip()
@@ -2135,6 +2160,7 @@ async def async_setup_entry(hass, entry):
                 if remaining.total_seconds() <= 0:
                     continue
 
+                attendance_mode = str(team_cfg.get(CONF_WAHA_ATTENDANCE_MODE, DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
                 poll_days = int(team_cfg.get(CONF_WAHA_POLL_DAYS_BEFORE, DEFAULT_POLL_DAYS_BEFORE))
                 poll_time = str(team_cfg.get(CONF_WAHA_POLL_TIME, DEFAULT_POLL_TIME))
                 reminder_days = int(team_cfg.get(CONF_WAHA_REMINDER_DAYS_BEFORE, DEFAULT_REMINDER_DAYS_BEFORE))
@@ -2143,6 +2169,20 @@ async def async_setup_entry(hass, entry):
                 reminder_at = _scheduled_local_datetime(kickoff, reminder_days, reminder_time)
 
                 poll_id, meta = store.latest_poll(team_id, match.match_id, False)
+
+                if attendance_mode == WAHA_ATTENDANCE_MODE_MESSAGES:
+                    # No poll and no poll reminder for this team. Use the existing
+                    # match information message on the configured matchday time.
+                    matchday_enabled = bool(team_cfg.get(CONF_MATCHDAY_MESSAGE_ENABLED, True))
+                    matchday_time = str(team_cfg.get(CONF_MATCHDAY_MESSAGE_TIME, DEFAULT_MATCHDAY_MESSAGE_TIME))
+                    matchday_at = _scheduled_local_datetime(kickoff, 0, matchday_time)
+                    if (matchday_enabled and matchday_at is not None and current.date() == kickoff.date()
+                            and current >= matchday_at and current < kickoff):
+                        try:
+                            await _send_matchday_info(coordinator, team_data, match, False, force=False)
+                        except Exception:
+                            pass
+                    continue
 
                 # Configured X calendar days before the match at the selected local clock time.
                 # A restart after the scheduled moment catches up once, as long as kickoff has not passed.
@@ -2225,6 +2265,7 @@ async def async_setup_entry(hass, entry):
                 start,item=_next_training(td,current)
                 if not item or not start: continue
                 tid=_training_id(item); cfg=dict(training_cfg_all.get(team_id,{}) or {})
+                attendance_mode=str(wcfg.get(CONF_WAHA_ATTENDANCE_MODE,DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
                 poll_days=int(cfg.get(CONF_TRAINING_POLL_DAYS_BEFORE,DEFAULT_TRAINING_POLL_DAYS_BEFORE))
                 poll_time=str(cfg.get(CONF_TRAINING_POLL_TIME,DEFAULT_TRAINING_POLL_TIME))
                 rem_days=int(cfg.get(CONF_TRAINING_REMINDER_DAYS_BEFORE,DEFAULT_TRAINING_REMINDER_DAYS_BEFORE))
@@ -2232,6 +2273,15 @@ async def async_setup_entry(hass, entry):
                 poll_at=_scheduled_local_datetime(start,poll_days,poll_time); rem_at=_scheduled_local_datetime(start,rem_days,rem_time)
                 pid,meta=store.latest_training_poll(team_id,tid,False)
                 production_enabled=bool(cfg.get(CONF_TRAINING_PRODUCTION_ENABLED,True))
+                if attendance_mode == WAHA_ATTENDANCE_MODE_MESSAGES:
+                    # No poll, no poll reminder, and no attendance summary.
+                    info_enabled=bool(cfg.get(CONF_TRAINING_INFO_ENABLED,True))
+                    info_hours=int(cfg.get(CONF_TRAINING_INFO_HOURS_BEFORE,DEFAULT_TRAINING_INFO_HOURS_BEFORE))
+                    info_at=start-timedelta(hours=max(0,info_hours))
+                    if info_enabled and current>=info_at and current<start:
+                        try: await _send_training_info(coordinator,td,item,False,force=False)
+                        except Exception: pass
+                    continue
                 if pid is None and production_enabled and poll_at is not None and current>=poll_at and current<start:
                     try:
                         await hass.services.async_call(DOMAIN,SERVICE_SEND_TRAINING_POLL,{ATTR_TEAM_ID:team_id,ATTR_TEST_MODE:False},blocking=True)

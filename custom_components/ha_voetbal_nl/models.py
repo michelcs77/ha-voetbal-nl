@@ -100,9 +100,10 @@ class SelectedTeamData:
     program_candidate_count: int = 0
     driving_excluded: list[str] = field(default_factory=list)
     driving_extra: list[str] = field(default_factory=list)
+    driving_unavailable_dates: list[dict] = field(default_factory=list)
     driving_cars: int = 4
     flagging_enabled: bool = False
-    flagging_excluded: list[str] = field(default_factory=list)
+    flagging_allowed: list[str] = field(default_factory=list)
     flagging_extra: list[str] = field(default_factory=list)
     training_sessions: list[dict] = field(default_factory=list)
     match_present_minutes: int = 45

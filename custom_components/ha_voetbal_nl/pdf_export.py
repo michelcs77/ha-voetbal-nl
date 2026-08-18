@@ -544,19 +544,24 @@ def build_season_pdf(export: dict, logo_bytes: dict[str, bytes] | None = None) -
         1 for m in matches
         if m.get("thuiswedstrijd") is False and (m.get("rijschema") or {}).get("status") == "geregeld"
     )
-    pdf.summary_boxes([
+    flagging_enabled = bool(export.get("vlaggen_ingeschakeld", False))
+    flagged = sum(1 for m in matches if m.get("vlagger_status") == "geregeld") if flagging_enabled else 0
+    summary = [
         ("Wedstrijden", len(matches)),
         ("Thuis", home_count),
         ("Uit", away_count),
         ("Rijschema", f"{planned}/{away_count}"),
-    ])
+    ]
+    if flagging_enabled:
+        summary.append(("Vlaggers", f"{flagged}/{len(matches)}"))
+    pdf.summary_boxes(summary)
 
     match_rows = []
     for m in matches:
         plan = m.get("rijschema", {}) or {}
         home_name = m.get("thuisteam") or (team if m.get("thuiswedstrijd") is True else m.get("tegenstander", ""))
         away_name = m.get("uitteam") or (m.get("tegenstander", "") if m.get("thuiswedstrijd") is True else team)
-        match_rows.append([
+        row = [
             m.get("weeknummer") or str(m.get("week", "")).lstrip("W"),
             m.get("datum", ""),
             m.get("tijd", ""),
@@ -566,12 +571,24 @@ def build_season_pdf(export: dict, logo_bytes: dict[str, bytes] | None = None) -
             f"{m.get('reistijd_minuten', 0) or 0} min",
             m.get("verzameltijd", "") or "-",
             plan.get("status", "-") if m.get("thuiswedstrijd") is False else "-",
-        ])
+        ]
+        if flagging_enabled:
+            row.append(
+                f"{m.get('vlagger')} ({m.get('vlagger_status')})"
+                if m.get("vlagger")
+                else ("Niet geregeld" if m.get("vlaggen_verplicht") else "-")
+            )
+        match_rows.append(row)
+    headers = ["Week", "Datum", "Tijd", "Thuisteam", "Uitteam", "Accommodatie", "Reistijd", "Verzamelen", "Rijschema"]
+    widths = [35, 62, 40, 125, 125, 180, 58, 70, 70]
+    if flagging_enabled:
+        headers.append("Vlagger")
+        widths = [32, 60, 38, 105, 105, 135, 55, 60, 55, 80]
     pdf.table(
-        ["Week", "Datum", "Tijd", "Thuisteam", "Uitteam", "Accommodatie", "Reistijd", "Verzamelen", "Rijschema"],
+        headers,
         match_rows,
-        [35, 62, 40, 125, 125, 180, 58, 70, 70],
-        font_size=6.8,
+        widths,
+        font_size=6.6,
         min_row_height=25,
         image_size=20,
     )
@@ -642,6 +659,84 @@ def build_season_pdf(export: dict, logo_bytes: dict[str, bytes] | None = None) -
         image_size=20,
         keep_together_groups=person_group_sizes,
     )
+
+    # Flagging schedule: only included when flagging is enabled for this team.
+    # This mirrors the driving section: complete match schedule followed by a
+    # per-person overview of assigned assistant referees.
+    if flagging_enabled:
+        pdf.new_page("Vlaggers per wedstrijd")
+        flag_rows = []
+        for m in matches:
+            flagger = m.get("vlagger", "") or "-"
+            status = m.get("vlagger_status", "-") or "-"
+            if status == "geregeld":
+                status_text = "Geregeld"
+            elif status in {"niet_geregeld", "conflict"}:
+                status_text = "Niet geregeld"
+            else:
+                status_text = status
+            flag_rows.append([
+                m.get("weeknummer") or str(m.get("week", "")).lstrip("W"),
+                m.get("datum", ""),
+                m.get("tijd", ""),
+                "Thuis" if m.get("thuiswedstrijd") is True else "Uit",
+                _logo_cell(m.get("wedstrijd", ""), m.get("tegenstander_logo_url")),
+                flagger,
+                status_text,
+            ])
+        pdf.table(
+            ["Week", "Datum", "Tijd", "Type", "Wedstrijd", "Vlagger", "Status"],
+            flag_rows,
+            [42, 72, 48, 48, 285, 170, 106],
+            font_size=7.2,
+            min_row_height=25,
+            image_size=20,
+        )
+
+        pdf.new_page("Vlaggeroverzicht per persoon")
+        flag_people = list(export.get("vlagger_per_persoon", []))
+        flag_person_rows = []
+        flag_group_sizes = []
+        for person in flag_people:
+            assignments = person.get("wedstrijden", [])
+            name = person.get("speler", "")
+            if assignments:
+                for idx, assignment in enumerate(assignments):
+                    flag_person_rows.append([
+                        name if idx == 0 else "",
+                        assignment.get("week", ""),
+                        assignment.get("datum", ""),
+                        assignment.get("tijd", ""),
+                        _logo_cell(assignment.get("wedstrijd", ""), assignment.get("tegenstander_logo_url")),
+                        "Thuis" if assignment.get("thuiswedstrijd") is True else "Uit",
+                    ])
+                flag_person_rows.append([
+                    "", "", "", "",
+                    f"Totaal {person.get('aantal_wedstrijden', len(assignments))} wedstrijden",
+                    "Geregeld",
+                ])
+                flag_group_sizes.append(len(assignments) + 1)
+            else:
+                flag_person_rows.append([
+                    name, "", "", "",
+                    "Geen toegewezen wedstrijden",
+                    "0 wedstrijden",
+                ])
+                flag_group_sizes.append(1)
+
+        if flag_person_rows:
+            pdf.table(
+                ["Speler", "Week", "Datum", "Tijd", "Wedstrijd", "Status"],
+                flag_person_rows,
+                [140, 50, 75, 45, 385, 80],
+                font_size=7.4,
+                min_row_height=24,
+                image_size=20,
+                keep_together_groups=flag_group_sizes,
+            )
+        else:
+            pdf.text(MARGIN, pdf.y - 10, "Er zijn nog geen vlaggers toegewezen.", 9)
+            pdf.y -= 28
 
     # Training schedule with vacation/cancelled rows explicit.
     pdf.new_page(f"Trainingsschema {season}")

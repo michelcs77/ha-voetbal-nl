@@ -354,6 +354,18 @@ class ProgramSensor(BaseTeamEntity):
                     "chauffeurs": [],
                 }
             )
+            flag = (
+                self.coordinator.flagging_plan.status_for_match(
+                    data, match, self.coordinator.driving_plan
+                )
+                if self.coordinator.flagging_plan is not None
+                else {
+                    "vereist": False,
+                    "status": "niet_van_toepassing",
+                    "vlagger": "",
+                    "kandidaten": [],
+                }
+            )
             wedstrijden.append({
                 "wedstrijd_id": match.match_id,
                 "week": f"W{weeknummer}" if weeknummer else None,
@@ -372,6 +384,13 @@ class ProgramSensor(BaseTeamEntity):
                     True if plan["status"] == "geregeld"
                     else False if plan["vereist"] else None
                 ),
+                "vlaggen_verplicht": flag["vereist"],
+                "vlaggen_status": flag["status"],
+                "vlaggen_geregeld": (
+                    True if flag["status"] == "geregeld"
+                    else False if flag["vereist"] else None
+                ),
+                "vlagger": flag.get("vlagger", ""),
             })
 
         return {
@@ -1061,6 +1080,7 @@ class DrivingScheduleSensor(BaseTeamEntity):
             "aantal_beschikbare_chauffeurs": len(available),
             "beschikbare_chauffeurs": available,
             "uitgesloten_chauffeurs": list(data.driving_excluded),
+            "tijdelijke_rijbeperkingen": list(getattr(data, "driving_unavailable_dates", []) or []),
             "aantal_uitwedstrijden": len(schema),
             "aantal_rijschemas_geregeld": sum(
                 1 for x in schema if x["rijschema_status"] == "geregeld"
@@ -1104,7 +1124,37 @@ class FlaggingScheduleSensor(BaseTeamEntity):
                 st=store.status_for_match(data,match,self.coordinator.driving_plan)
                 if st["status"] in {"niet_geregeld","conflict"}: warnings.append({"wedstrijd_id":match.match_id,"status":st["status"],"vlagger":st.get("vlagger","")})
                 rows.append({"wedstrijd_id":match.match_id,"datum":match.date_iso,"tijd":match.time,"thuiswedstrijd":match.is_home,"tegenstander":match.opponent,"vlagger":st.get("vlagger",""),"vlagger_status":st.get("status"),"vlaggen_verplicht":st.get("vereist")})
-        return {"team_id":data.team.team_id,"team_naam":data.team.name,"vlaggen_ingeschakeld":data.flagging_enabled,"uitgesloten_vlaggers":list(data.flagging_excluded),"extra_vlaggers":list(data.flagging_extra),"aantal_wedstrijden":len(rows),"aantal_vlaggers_geregeld":sum(1 for x in rows if x["vlagger_status"]=="geregeld"),"aantal_vlaggers_niet_geregeld":sum(1 for x in rows if x["vlagger_status"] in {"niet_geregeld","conflict"}),"schema":rows,"waarschuwingen":warnings}
+        # Distribution for dashboard/PDF: count only actual geregeld assignments.
+        # Include every configured flagger so someone with zero assignments is
+        # still visible in the distribution, just like the driving schedule.
+        people = []
+        seen = set()
+        for raw in list(data.flagging_allowed) + list(data.flagging_extra):
+            name = " ".join(str(raw).split())
+            key = name.casefold()
+            if name and key not in seen:
+                seen.add(key)
+                people.append(name)
+
+        counts = {name.casefold(): 0 for name in people}
+        display_names = {name.casefold(): name for name in people}
+        for row in rows:
+            if row.get("vlagger_status") != "geregeld":
+                continue
+            name = " ".join(str(row.get("vlagger") or "").split())
+            key = name.casefold()
+            if key:
+                if key not in display_names:
+                    display_names[key] = name
+                    counts[key] = 0
+                counts[key] += 1
+
+        verdeling = [
+            {"speler": display_names[key], "wedstrijden": counts[key]}
+            for key in sorted(display_names, key=lambda k: (-(counts.get(k, 0)), display_names[k].casefold()))
+        ]
+
+        return {"team_id":data.team.team_id,"team_naam":data.team.name,"vlaggen_ingeschakeld":data.flagging_enabled,"geselecteerde_vlaggers":list(data.flagging_allowed),"extra_vlaggers":list(data.flagging_extra),"aantal_wedstrijden":len(rows),"aantal_vlaggers_geregeld":sum(1 for x in rows if x["vlagger_status"]=="geregeld"),"aantal_vlaggers_niet_geregeld":sum(1 for x in rows if x["vlagger_status"] in {"niet_geregeld","conflict"}),"schema":rows,"verdeling":verdeling,"waarschuwingen":warnings}
 
 
 class SeasonOverviewSensor(BaseTeamEntity):
@@ -1156,6 +1206,16 @@ class SeasonOverviewSensor(BaseTeamEntity):
                     == "aanvullend_schema_nodig"
             ),
             "rijschema_per_persoon": export.get("rijschema_per_persoon", []),
+            "vlaggen_ingeschakeld": export.get("vlaggen_ingeschakeld", False),
+            "aantal_vlaggers_geregeld": sum(
+                1 for x in matches
+                if x.get("vlagger_status") == "geregeld"
+            ),
+            "aantal_vlaggers_niet_geregeld": sum(
+                1 for x in matches
+                if x.get("vlagger_status") in {"niet_geregeld", "conflict"}
+            ),
+            "vlagger_per_persoon": export.get("vlagger_per_persoon", []),
             "aantal_trainingsmomenten_seizoen": len(
                 export.get("trainingskalender", [])
             ),

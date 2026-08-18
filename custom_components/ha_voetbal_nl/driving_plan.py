@@ -8,6 +8,17 @@ from homeassistant.helpers.storage import Store
 STORAGE_VERSION = 1
 
 
+def _temporary_unavailability(team_data):
+    out = {}
+    for item in getattr(team_data, "driving_unavailable_dates", []) or []:
+        if isinstance(item, dict):
+            name = " ".join(str(item.get("name", "")).split())
+            date_iso = str(item.get("date", "")).strip()
+            if name and date_iso:
+                out.setdefault(name.casefold(), set()).add(date_iso)
+    return out
+
+
 class DrivingPlanStore:
     """Persist stable driver assignments per team and match."""
 
@@ -79,9 +90,11 @@ class DrivingPlanStore:
             }
 
         excluded = {x.casefold() for x in team_data.driving_excluded}
+        unavailable = _temporary_unavailability(team_data)
         eligible_drivers = [
             name for name in assignment.get("chauffeurs", [])
             if name.casefold() not in excluded
+            and match.date_iso not in unavailable.get(name.casefold(), set())
         ]
         assigned = len(eligible_drivers)
         status = "geregeld" if assigned >= needed else "niet_compleet"
@@ -117,8 +130,9 @@ def _current_stats(team_data, store):
         if not match or match.is_home is not False:
             continue
         km = float(match.route.afstand_retour_km or 0.0)
+        unavailable = _temporary_unavailability(team_data)
         for name in item.get("chauffeurs", []):
-            if name not in stats:
+            if name not in stats or match.date_iso in unavailable.get(name.casefold(), set()):
                 continue
             stats[name]["ritten"] += 1
             stats[name]["kilometers"] += km
@@ -131,12 +145,14 @@ def _choose_supplemental(team_data, store, matches):
     cars = max(1, int(team_data.driving_cars or 1))
     output = {}
 
+    unavailable = _temporary_unavailability(team_data)
     for match in sorted(matches, key=lambda m: (m.date_iso or "", m.time or "")):
-        needed = min(cars, len(names))
+        eligible_names = [n for n in names if match.date_iso not in unavailable.get(n.casefold(), set())]
+        needed = min(cars, len(eligible_names))
         km = float(match.route.afstand_retour_km or 0.0)
         best = None
         best_score = None
-        for combo in itertools.combinations(names, needed):
+        for combo in itertools.combinations(eligible_names, needed):
             projected = []
             for name in names:
                 trips = stats[name]["ritten"] + (1 if name in combo else 0)
@@ -160,7 +176,7 @@ def _choose_supplemental(team_data, store, matches):
                 best_score = score
                 best = list(combo)
 
-        drivers = best or names[:needed]
+        drivers = best or eligible_names[:needed]
         output[match.match_id] = drivers
         for name in drivers:
             stats[name]["ritten"] += 1

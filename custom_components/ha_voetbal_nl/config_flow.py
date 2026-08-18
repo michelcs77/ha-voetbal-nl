@@ -37,9 +37,10 @@ from .const import (
     CONF_DRIVING_ADD_SUPPLEMENT,
     CONF_DRIVING_EXTRA_DRIVERS,
     CONF_DRIVING_EXTRA_MANUAL,
+    CONF_DRIVING_UNAVAILABLE,
     CONF_FLAGGING_MANAGEMENT,
     CONF_FLAGGING_ENABLED,
-    CONF_FLAGGING_EXCLUDED,
+    CONF_FLAGGING_ALLOWED,
     CONF_FLAGGING_EXTRA,
     CONF_FLAGGING_EXTRA_MANUAL,
     CONF_FLAGGING_REBUILD,
@@ -71,6 +72,7 @@ from .const import (
     CONF_WAHA_ASSISTANT_NAME,
     CONF_WAHA_IDENTITY_MAPPINGS,
     CONF_WAHA_POLL_DAYS_BEFORE,
+    CONF_WAHA_ATTENDANCE_MODE, WAHA_ATTENDANCE_MODE_POLLS, WAHA_ATTENDANCE_MODE_MESSAGES, DEFAULT_WAHA_ATTENDANCE_MODE,
     CONF_WAHA_POLL_TIME,
     CONF_WAHA_REMINDER_DAYS_BEFORE,
     CONF_WAHA_REMINDER_TIME,
@@ -687,6 +689,11 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
         current_cars = int(current.get("cars", DEFAULT_DRIVING_CARS))
         current_excluded = list(current.get("excluded", []))
         current_extra = list(current.get("extra_drivers", []))
+        current_unavailable = list(current.get(CONF_DRIVING_UNAVAILABLE, []))
+        current_unavailable_text = "; ".join(
+            f"{item.get('name', '')} | {item.get('date', '')}"
+            for item in current_unavailable if isinstance(item, dict) and item.get("name") and item.get("date")
+        )
 
         if user_input is not None:
             cars = int(user_input[CONF_DRIVING_CARS])
@@ -696,7 +703,30 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
             extra = list(dict.fromkeys(user_input.get(CONF_DRIVING_EXTRA_DRIVERS, [])))
             manual = [" ".join(x.split()) for x in str(user_input.get(CONF_DRIVING_EXTRA_MANUAL, "")).split(",") if x.strip()]
             extra = list(dict.fromkeys(extra + manual))
-            all_cfg[self._team_id] = {"cars": cars, "excluded": excluded, "extra_drivers": extra}
+            unavailable = []
+            raw_unavailable = str(user_input.get(CONF_DRIVING_UNAVAILABLE, ""))
+            for entry in re.split(r"[;\n]+", raw_unavailable):
+                entry = " ".join(entry.split())
+                if not entry:
+                    continue
+                if "|" not in entry:
+                    continue
+                name, raw_date = [x.strip() for x in entry.split("|", 1)]
+                parsed = None
+                for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+                    try:
+                        parsed = datetime.strptime(raw_date, fmt).date().isoformat()
+                        break
+                    except ValueError:
+                        pass
+                if name and parsed:
+                    unavailable.append({"name": name, "date": parsed})
+            all_cfg[self._team_id] = {
+                "cars": cars,
+                "excluded": excluded,
+                "extra_drivers": extra,
+                CONF_DRIVING_UNAVAILABLE: unavailable,
+            }
             if user_input.get(CONF_DRIVING_ADD_SUPPLEMENT, False):
                 await coordinator.async_add_supplemental_driving_plan(
                     self._team_id
@@ -727,7 +757,6 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
                 ),
                 vol.Optional(
                     CONF_DRIVING_EXTRA_DRIVERS,
-    CONF_DRIVING_EXTRA_MANUAL,
                     default=current_extra,
                 ): SelectSelector(
                     SelectSelectorConfig(
@@ -737,11 +766,15 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
                     )
                 ),
                 vol.Optional(
+                    CONF_DRIVING_UNAVAILABLE,
+                    default=current_unavailable_text,
+                ): TextSelector(TextSelectorConfig(type="text")),
+                vol.Optional(
                     CONF_DRIVING_ADD_SUPPLEMENT,
                     default=False,
                 ): bool,
             }),
-            description_placeholders={"team": team_data.team.name},
+            description_placeholders={"team": team_data.team.name, "temporary_driver_help": "Gebruik: Naam | DD-MM-JJJJ. Meerdere regels scheiden met ;. Alleen op die datum niet beschikbaar om te rijden."},
         )
 
     async def async_step_match_tasks_team(self, user_input=None):
@@ -762,25 +795,35 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
         all_cfg=dict(self.config_entry.options.get(CONF_FLAGGING_MANAGEMENT,{}))
         current=dict(all_cfg.get(self._team_id,{}))
         people=list(dict.fromkeys(list(team.selected_players)+list(team.manual_players)+list(team.driving_extra)+[x.name for x in team.staff]))
-        current_enabled=bool(current.get("enabled",False)); current_excl=list(current.get("excluded",[])); current_extra=list(current.get("extra",[]))
+        current_enabled=bool(current.get("enabled",False))
+        # v0.10.1: whitelist. Only explicitly selected people may be planned as flaggers.
+        current_allowed=list(current.get("flaggers",[]))
+        stored_extra=list(current.get("extra",[]))
+        current_extra=[x for x in stored_extra if x in people]
+        current_extra_manual=[x for x in stored_extra if x not in people]
         if user_input is not None:
+            allowed=list(dict.fromkeys(user_input.get(CONF_FLAGGING_ALLOWED,[])))
             extra=list(dict.fromkeys(user_input.get(CONF_FLAGGING_EXTRA,[])))
-            manual=[" ".join(x.split()) for x in str(user_input.get(CONF_FLAGGING_EXTRA_MANUAL, "")).split(",") if x.strip()]
-            cfg={"enabled":bool(user_input.get(CONF_FLAGGING_ENABLED,False)),"excluded":list(dict.fromkeys(user_input.get(CONF_FLAGGING_EXCLUDED,[]))),"extra":list(dict.fromkeys(extra+manual))}
+            manual=[" ".join(x.split()) for x in str(user_input.get(CONF_FLAGGING_EXTRA_MANUAL, "")).replace(";", ",").split(",") if x.strip()]
+            cfg={
+                "enabled": bool(user_input.get(CONF_FLAGGING_ENABLED,False)),
+                "flaggers": allowed,
+                "extra": list(dict.fromkeys(extra+manual)),
+            }
             all_cfg[self._team_id]=cfg
             new_options=dict(self.config_entry.options); new_options[CONF_FLAGGING_MANAGEMENT]=all_cfg
             if user_input.get(CONF_FLAGGING_REBUILD,False):
                 team.flagging_enabled = cfg["enabled"]
-                team.flagging_excluded = cfg["excluded"]
+                team.flagging_allowed = cfg["flaggers"]
                 team.flagging_extra = cfg["extra"]
                 await coordinator.async_rebuild_match_tasks(self._team_id)
             return self.async_create_entry(title="",data=new_options)
         opts=[SelectOptionDict(value=n,label=n) for n in people]
         return self.async_show_form(step_id="match_tasks",data_schema=vol.Schema({
             vol.Required(CONF_FLAGGING_ENABLED,default=current_enabled): bool,
-            vol.Optional(CONF_FLAGGING_EXCLUDED,default=current_excl): SelectSelector(SelectSelectorConfig(options=opts,multiple=True,mode="dropdown")),
+            vol.Optional(CONF_FLAGGING_ALLOWED,default=current_allowed): SelectSelector(SelectSelectorConfig(options=opts,multiple=True,mode="dropdown")),
             vol.Optional(CONF_FLAGGING_EXTRA,default=current_extra): SelectSelector(SelectSelectorConfig(options=opts,multiple=True,mode="dropdown")),
-            vol.Optional(CONF_FLAGGING_EXTRA_MANUAL,default=""): TextSelector(TextSelectorConfig(type="text")),
+            vol.Optional(CONF_FLAGGING_EXTRA_MANUAL,default=", ".join(current_extra_manual)): TextSelector(TextSelectorConfig(type="text")),
             vol.Optional(CONF_FLAGGING_REBUILD,default=False): bool,
         }),description_placeholders={"team":team.team.name})
 
@@ -2190,6 +2233,7 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
                         CONF_WAHA_PROD_GROUP_ID: prod_id,
                         CONF_WAHA_PROD_GROUP_NAME: label_by_id.get(prod_id, prod_id),
                         CONF_WAHA_ASSISTANT_NAME: str(user_input.get(CONF_WAHA_ASSISTANT_NAME, "De AI-Stafchef") or "De AI-Stafchef").strip() or "De AI-Stafchef",
+                        CONF_WAHA_ATTENDANCE_MODE: str(user_input.get(CONF_WAHA_ATTENDANCE_MODE, DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE),
                         CONF_WAHA_POLL_DAYS_BEFORE: poll_days,
                         CONF_WAHA_POLL_TIME: poll_time,
                         CONF_WAHA_REMINDER_DAYS_BEFORE: reminder_days,
@@ -2221,6 +2265,7 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
             default_test = "__choose_group__"
         default_prod = str(current_team.get(CONF_WAHA_PROD_GROUP_ID) or "")
         default_assistant_name = str(current_team.get(CONF_WAHA_ASSISTANT_NAME) or "De AI-Stafchef").strip() or "De AI-Stafchef"
+        default_attendance_mode = str(current_team.get(CONF_WAHA_ATTENDANCE_MODE, DEFAULT_WAHA_ATTENDANCE_MODE) or DEFAULT_WAHA_ATTENDANCE_MODE)
         if default_prod not in valid_ids:
             default_prod = "__choose_group__"
         default_poll_days = int(current_team.get(CONF_WAHA_POLL_DAYS_BEFORE, DEFAULT_POLL_DAYS_BEFORE))
@@ -2243,6 +2288,14 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
                     SelectSelectorConfig(options=selector_options, multiple=False, mode="dropdown")
                 ),
                 vol.Required(CONF_WAHA_ASSISTANT_NAME, default=default_assistant_name): str,
+                vol.Required(CONF_WAHA_ATTENDANCE_MODE, default=default_attendance_mode): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(value=WAHA_ATTENDANCE_MODE_POLLS, label="📊 Berichten + polls"),
+                            SelectOptionDict(value=WAHA_ATTENDANCE_MODE_MESSAGES, label="💬 Alleen berichten (geen polls)"),
+                        ], multiple=False, mode="dropdown"
+                    )
+                ),
                 vol.Required(CONF_WAHA_POLL_DAYS_BEFORE, default=default_poll_days): vol.All(vol.Coerce(int), vol.Range(min=0, max=14)),
                 vol.Required(CONF_WAHA_POLL_TIME, default=default_poll_time): str,
                 vol.Required(CONF_WAHA_REMINDER_DAYS_BEFORE, default=default_reminder_days): vol.All(vol.Coerce(int), vol.Range(min=0, max=14)),
