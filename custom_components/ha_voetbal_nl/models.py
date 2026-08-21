@@ -98,6 +98,7 @@ class SelectedTeamData:
     matches: list[Match] = field(default_factory=list)
     program_source_count: int = 0
     program_candidate_count: int = 0
+    program_debug: dict = field(default_factory=dict)
     driving_excluded: list[str] = field(default_factory=list)
     driving_extra: list[str] = field(default_factory=list)
     driving_unavailable_dates: list[dict] = field(default_factory=list)

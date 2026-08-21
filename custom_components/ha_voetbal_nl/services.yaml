@@ -1,0 +1,251 @@
+genereer_seizoens_pdf:
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    bestandsnaam:
+      required: false
+      example: vv_cuijk_3_seizoen_2026_2027.pdf
+      selector:
+        text:
+
+verstuur_aanwezigheidspoll:
+  name: Aanwezigheidspoll versturen
+  description: Verstuur een WhatsApp-aanwezigheidspoll via WAHA. Zonder wedstrijd_id wordt de eerstvolgende wedstrijd gebruikt.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    testmodus:
+      required: false
+      default: true
+      selector:
+        boolean:
+    wedstrijd_id:
+      required: false
+      example: M207746522
+      description: Alleen in testmodus. Kies expliciet een wedstrijd om veilig een toekomstige poll te testen.
+      selector:
+        text:
+
+controleer_aanwezigheid:
+  name: Aanwezigheid nu controleren
+  description: Voer handmatig de herinnerings- en chauffeurcontrole uit. Zonder wedstrijd_id wordt de eerstvolgende wedstrijd gebruikt.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    testmodus:
+      required: false
+      default: true
+      selector:
+        boolean:
+    wedstrijd_id:
+      required: false
+      example: M207746522
+      description: Alleen in testmodus. Controleer expliciet de poll van deze wedstrijd.
+      selector:
+        text:
+
+
+simuleer_aanwezigheidsstatus:
+  name: Aanwezigheidsstatus simuleren
+  description: Simuleer veilig één speler- of stafstatus voor een bestaande testpoll. Productiepolls worden nooit aangepast.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    wedstrijd_id:
+      required: true
+      example: M207746522
+      selector:
+        text:
+    persoon:
+      required: true
+      example: Calvin van Dinter
+      selector:
+        text:
+    status:
+      required: true
+      selector:
+        select:
+          options:
+            - aanwezig
+            - afwezig
+            - geblesseerd
+            - niet_gereageerd
+    testmodus:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+simuleer_scheduler:
+  name: Automatische scheduler veilig simuleren
+  description: Simuleer de WhatsApp-tijdlijn uitsluitend via de testgroep. Voer achtereenvolgens pollmoment, remindermoment en aftrap uit. Productiegroep en rijschema worden nooit aangepast.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    wedstrijd_id:
+      required: true
+      example: M207746522
+      selector:
+        text:
+    fase:
+      required: true
+      selector:
+        select:
+          options:
+            - pollmoment
+            - remindermoment
+            - aftrap
+    testmodus:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+
+toon_aanwezigheidsstatus:
+  name: Aanwezigheidsstatus van wedstrijd tonen
+  description: Lees de opgeslagen poll- en stemstatus van één specifieke wedstrijd uit. Deze actie is volledig read-only en verstuurt geen WhatsApp-bericht.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector:
+        text:
+    wedstrijd_id:
+      required: true
+      example: M207746522
+      selector:
+        text:
+    testmodus:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+verstuur_trainingspoll:
+  name: Trainingspoll versturen
+  description: Verstuur een aanwezigheidspoll voor de eerstvolgende training. Een training_id is alleen toegestaan in testmodus.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector: {text: {}}
+    testmodus:
+      required: false
+      default: true
+      selector: {boolean: {}}
+    training_id:
+      required: false
+      example: training_20260818_2000
+      selector: {text: {}}
+
+controleer_training_aanwezigheid:
+  name: Training aanwezigheid controleren
+  description: Stuur een herinnering naar niet-stemmers voor een actieve trainingspoll.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector: {text: {}}
+    testmodus:
+      required: false
+      default: true
+      selector: {boolean: {}}
+    training_id:
+      required: false
+      example: training_20260818_2000
+      selector: {text: {}}
+
+simuleer_training_scheduler:
+  name: Trainingsscheduler veilig simuleren
+  description: Simuleer uitsluitend via de testgroep pollmoment, remindermoment en training_start.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector: {text: {}}
+    training_id:
+      required: true
+      example: training_20260818_2000
+      selector: {text: {}}
+    fase:
+      required: true
+      selector:
+        select:
+          options: [pollmoment, remindermoment, training_start]
+    testmodus:
+      required: false
+      default: true
+      selector: {boolean: {}}
+
+toon_training_aanwezigheidsstatus:
+  name: Trainingsaanwezigheidsstatus tonen
+  description: Lees de opgeslagen poll- en stemstatus van één training uit. Read-only; verstuurt niets.
+  fields:
+    team_id:
+      required: true
+      example: T1321338148
+      selector: {text: {}}
+    training_id:
+      required: true
+      example: training_20260818_2000
+      selector: {text: {}}
+    testmodus:
+      required: false
+      default: true
+      selector: {boolean: {}}
+
+verstuur_wedstrijddagbericht:
+  name: Wedstrijddagbericht versturen
+  description: Verstuur wedstrijdinfo met optioneel weer, reis, Waze, rijschema en chauffeurcontrole. Handmatige wedstrijdkeuze is alleen in testmodus toegestaan.
+  fields:
+    team_id:
+      name: Team-ID
+      required: true
+      selector:
+        text:
+    wedstrijd_id:
+      name: Wedstrijd-ID
+      required: false
+      selector:
+        text:
+    testmodus:
+      name: Testmodus
+      default: true
+      selector:
+        boolean:
+
+verstuur_trainingsdagbericht:
+  name: Trainingsdagbericht versturen
+  description: Verstuur trainingsinfo met optioneel weer en actuele aanwezigheidsstand. Handmatige trainingkeuze is alleen in testmodus toegestaan.
+  fields:
+    team_id:
+      name: Team-ID
+      required: true
+      selector:
+        text:
+    training_id:
+      name: Training-ID
+      required: false
+      selector:
+        text:
+    testmodus:
+      name: Testmodus
+      default: true
+      selector:
+        boolean:

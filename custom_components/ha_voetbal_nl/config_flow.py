@@ -705,13 +705,22 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
             extra = list(dict.fromkeys(extra + manual))
             unavailable = []
             raw_unavailable = str(user_input.get(CONF_DRIVING_UNAVAILABLE, ""))
-            for entry in re.split(r"[;\n]+", raw_unavailable):
-                entry = " ".join(entry.split())
-                if not entry:
-                    continue
-                if "|" not in entry:
-                    continue
-                name, raw_date = [x.strip() for x in entry.split("|", 1)]
+            # Accept the documented separators (; or newline), but also be
+            # forgiving when multiple `Naam | DD-MM-JJJJ` pairs are pasted
+            # after one another separated only by whitespace.
+            pair_pattern = re.compile(
+                r"([^|;\n]+?)\s*\|\s*(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2})(?=\s*(?:;|\n|$|[^|;\n]+?\s*\|))"
+            )
+            pairs = pair_pattern.findall(raw_unavailable)
+            if not pairs and raw_unavailable.strip():
+                pairs = []
+                for entry in re.split(r"[;\n]+", raw_unavailable):
+                    if "|" in entry:
+                        pairs.append(tuple(x.strip() for x in entry.split("|", 1)))
+
+            for name, raw_date in pairs:
+                name = " ".join(str(name).split())
+                raw_date = str(raw_date).strip()
                 parsed = None
                 for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
                     try:
@@ -720,7 +729,12 @@ class HaVoetbalNlOptionsFlow(OptionsFlowWithReload):
                     except ValueError:
                         pass
                 if name and parsed:
-                    unavailable.append({"name": name, "date": parsed})
+                    item = {"name": name, "date": parsed}
+                    if not any(
+                        x.get("name", "").casefold() == name.casefold() and x.get("date") == parsed
+                        for x in unavailable
+                    ):
+                        unavailable.append(item)
             all_cfg[self._team_id] = {
                 "cars": cars,
                 "excluded": excluded,

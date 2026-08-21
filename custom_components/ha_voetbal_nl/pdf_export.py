@@ -660,6 +660,37 @@ def build_season_pdf(export: dict, logo_bytes: dict[str, bytes] | None = None) -
         keep_together_groups=person_group_sizes,
     )
 
+    # Date-specific driver unavailability. This is deliberately shown for both
+    # home and away matches so the PDF is a complete record of the configured
+    # restrictions, even when no driving schedule is needed for a home match.
+    unavailable = list(export.get("chauffeurs_niet_beschikbaar", []))
+    pdf.new_page("Chauffeurs niet beschikbaar")
+    if unavailable:
+        unavailable_rows = []
+        for item in unavailable:
+            match_type = (
+                "Thuis" if item.get("thuiswedstrijd") is True
+                else "Uit" if item.get("thuiswedstrijd") is False
+                else "-"
+            )
+            unavailable_rows.append([
+                item.get("weeknummer") or str(item.get("week", "")).lstrip("W"),
+                item.get("datum", ""),
+                match_type,
+                item.get("wedstrijd", "-") or "-",
+                ", ".join(item.get("chauffeurs", []) or []),
+            ])
+        pdf.table(
+            ["Week", "Datum", "Type", "Wedstrijd", "Chauffeurs niet beschikbaar"],
+            unavailable_rows,
+            [48, 78, 58, 345, 257],
+            font_size=7.4,
+            min_row_height=25,
+        )
+    else:
+        pdf.text(MARGIN, pdf.y - 10, "Er zijn geen tijdelijke rijbeperkingen ingesteld.", 9)
+        pdf.y -= 28
+
     # Flagging schedule: only included when flagging is enabled for this team.
     # This mirrors the driving section: complete match schedule followed by a
     # per-person overview of assigned assistant referees.

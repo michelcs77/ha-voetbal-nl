@@ -156,6 +156,40 @@ def build_season_export(team_data, driving_plan, flagging_plan=None):
                 team_logo_url = match.away_logo_url
                 break
 
+    # Date-specific driver unavailability for the PDF/export. Group entries by
+    # date so the document stays compact and also show restrictions entered
+    # for home matches (useful as a complete configuration overview).
+    match_by_date = {}
+    for row in matches:
+        if row.get("datum_iso"):
+            match_by_date.setdefault(row["datum_iso"], row)
+
+    unavailable_by_date = {}
+    for item in list(getattr(team_data, "driving_unavailable_dates", []) or []):
+        if not isinstance(item, dict):
+            continue
+        name = " ".join(str(item.get("name") or "").split())
+        date_iso = str(item.get("date") or "").strip()
+        if not name or not date_iso:
+            continue
+        names = unavailable_by_date.setdefault(date_iso, [])
+        if name.casefold() not in {x.casefold() for x in names}:
+            names.append(name)
+
+    driver_unavailability = []
+    for date_iso in sorted(unavailable_by_date):
+        match_row = match_by_date.get(date_iso, {})
+        week = match_row.get("weeknummer") or _week_number(date_iso)
+        driver_unavailability.append({
+            "week": f"W{week}" if week is not None else None,
+            "weeknummer": week,
+            "datum": _display_date(date_iso),
+            "datum_iso": date_iso,
+            "wedstrijd": match_row.get("wedstrijd") or "-",
+            "thuiswedstrijd": match_row.get("thuiswedstrijd"),
+            "chauffeurs": unavailable_by_date[date_iso],
+        })
+
     return {
         "team_id": team_data.team.team_id,
         "team_naam": team_data.team.name,
@@ -163,6 +197,7 @@ def build_season_export(team_data, driving_plan, flagging_plan=None):
         "seizoen": team_data.training_season,
         "wedstrijden": matches,
         "rijschema_per_persoon": people,
+        "chauffeurs_niet_beschikbaar": driver_unavailability,
         "vlagger_per_persoon": vlaggers,
         "vlaggen_ingeschakeld": bool(getattr(team_data, "flagging_enabled", False)),
         # Full training calendar intentionally remains internal; this is exactly

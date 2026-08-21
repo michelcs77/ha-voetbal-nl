@@ -3,7 +3,7 @@ from http.cookies import SimpleCookie
 from html import unescape
 import json
 import re
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, FormData
 
@@ -215,38 +215,132 @@ class VoetbalNlClient:
         )
 
     async def async_get_team_program(self, team):
-        """Fetch the complete team programme, including ScheduleResults AJAX data."""
+        """Fetch the complete team programme, including chained ScheduleResults data.
+
+        Voetbal.nl does not always put the full season in the initial team page.
+        A ScheduleResults block can load a second block through AJAX, and that
+        response can itself contain another URL.  Following only the URLs from
+        the first page therefore truncates some programmes after one phase.
+        """
         html = await self.async_get_authenticated(
             f"/team/{team.team_id}/programma"
         )
 
-        # Voetbal.nl can render only the first programme block in the main page
-        # and expose later rounds through one or more ScheduleResults AJAX URLs.
-        # Discover those URLs from data-options instead of hardcoding competition
-        # names, so this works for every club/team and competition phase.
-        ajax_paths = []
-        for attr in re.findall(r'data-options=["\']([^"\']+)["\']', html, re.I):
-            decoded = unescape(attr)
-            try:
-                options = json.loads(decoded)
-            except json.JSONDecodeError:
-                continue
-            ajax_path = str(options.get("url") or "").strip()
-            if (
-                ajax_path
-                and ajax_path.startswith("/")
-                and "/programma/" in ajax_path
-                and ajax_path not in ajax_paths
+        def _normalise_program_path(value):
+            """Return a safe same-site program path or None."""
+            value = unescape(str(value or "")).strip().replace("\\/", "/")
+            if not value:
+                return None
+
+            # data-options can contain an absolute voetbal.nl URL.  Convert it
+            # back to a path because async_get_authenticated prefixes BASE_URL.
+            if value.startswith("http://") or value.startswith("https://"):
+                parsed = urlsplit(value)
+                base = urlsplit(BASE_URL)
+                if parsed.netloc.casefold() != base.netloc.casefold():
+                    return None
+                value = parsed.path or "/"
+                if parsed.query:
+                    value += f"?{parsed.query}"
+
+            if not value.startswith("/"):
+                return None
+
+            # Only crawl team ScheduleResults AJAX endpoints. Never treat
+            # ordinary team pages or /wedstrijd/M.../programma detail links as
+            # pagination endpoints: doing so fans out into unrelated fixtures.
+            path_only = value.split("?", 1)[0]
+            if not re.fullmatch(r"/team/ajax/[^/]+/programma(?:/[^/]+)?", path_only, re.I):
+                return None
+            return value
+
+        def _discover_program_paths(source):
+            """Discover program AJAX paths from HTML/JSON component markup."""
+            paths = []
+            decoded_source = unescape(source or "")
+
+            # Primary source: component data-options JSON.  Support both normal
+            # quotes and HTML-escaped JSON values.
+            for attr in re.findall(
+                r'data-options\s*=\s*["\']([^"\']+)["\']',
+                source or "",
+                re.I | re.S,
             ):
-                ajax_paths.append(ajax_path)
+                decoded = unescape(attr)
+                options = None
+                try:
+                    options = json.loads(decoded)
+                except json.JSONDecodeError:
+                    # Be tolerant of a slightly changed serializer; extracting
+                    # just the URL is enough for ScheduleResults pagination.
+                    match = re.search(
+                        r'["\']?url["\']?\s*:\s*["\']([^"\']+)',
+                        decoded,
+                        re.I,
+                    )
+                    if match:
+                        options = {"url": match.group(1)}
+                if isinstance(options, dict):
+                    path = _normalise_program_path(options.get("url"))
+                    if path and path not in paths:
+                        paths.append(path)
+
+            # Fallback for JSON or changed component markup where the URL is no
+            # longer inside a data-options attribute.  Look only at URL-valued
+            # fields/attributes; ordinary fixture hrefs also contain /programma
+            # and must never be treated as pagination endpoints.
+            url_patterns = (
+                r'["\']url["\']\s*:\s*["\']([^"\']+)["\']',
+                r'data-(?:url|endpoint)\s*=\s*["\']([^"\']+)["\']',
+                # Voetbal.nl also renders programme tabs as ordinary href/action
+                # attributes.  v0.11.1 missed those and therefore saw only the
+                # beker ScheduleResults block for some teams.
+                r'(?:href|action)\s*=\s*["\']([^"\']+)["\']',
+                # Last-resort: pick up an escaped/raw same-team AJAX programme
+                # path wherever it occurs in component markup or inline JSON.
+                r'((?:https?://[^"\'\s<>]+)?/team/ajax/[^"\'\s<>]+/programma/[^"\'\s<>?#]+)',
+            )
+            for pattern in url_patterns:
+                for match in re.finditer(pattern, decoded_source, re.I | re.S):
+                    path = _normalise_program_path(match.group(1))
+                    if path and path not in paths:
+                        paths.append(path)
+
+            return paths
 
         html_parts = [html]
-        for ajax_path in ajax_paths:
+
+        # Breadth-first crawl of chained ScheduleResults responses.  The cap is
+        # defensive only; a normal team program needs just a handful of blocks.
+        discovered_initial_paths = _discover_program_paths(html)
+        queue = list(discovered_initial_paths)
+
+        # Some Voetbal.nl team pages expose only the active phase in the HTML
+        # (for example /beker) while the regular competition is available on a
+        # sibling ScheduleResults endpoint. Probe that canonical sibling too.
+        # A missing endpoint is harmless: async_get_authenticated raises and the
+        # crawler simply continues. This prevents a season from stopping at the
+        # end of the cup phase.
+        competition_path = f"/team/ajax/{team.team_id}/programma/competitie"
+        if competition_path not in queue:
+            queue.append(competition_path)
+
+        seen_paths = set()
+        failed_paths = []
+        max_program_requests = 40
+
+        while queue and len(seen_paths) < max_program_requests:
+            ajax_path = queue.pop(0)
+            if ajax_path in seen_paths:
+                continue
+            seen_paths.add(ajax_path)
+
             try:
                 ajax_text = await self.async_get_authenticated(ajax_path)
             except VoetbalNlError:
-                # Keep the main programme available if an optional AJAX block
-                # is temporarily unavailable.
+                # Keep all other program blocks usable if one optional block is
+                # temporarily unavailable.
+                failed_paths.append(ajax_path)
                 continue
 
             ajax_html = ajax_text
@@ -260,10 +354,26 @@ class VoetbalNlClient:
             if ajax_html:
                 html_parts.append(ajax_html)
 
+            # Critical v0.11.0 fix: also inspect every fetched response for the
+            # next ScheduleResults URL instead of stopping after the first page.
+            for candidate in _discover_program_paths(ajax_text):
+                if candidate not in seen_paths and candidate not in queue:
+                    queue.append(candidate)
+            if ajax_html != ajax_text:
+                for candidate in _discover_program_paths(ajax_html):
+                    if candidate not in seen_paths and candidate not in queue:
+                        queue.append(candidate)
+
         combined_html = "\n".join(html_parts)
+        all_program_ids = []
+        for found_id in re.findall(r'/wedstrijd/(M\d+)(?:/|["\'])', combined_html, re.I):
+            found_id = found_id.upper()
+            if found_id not in all_program_ids:
+                all_program_ids.append(found_id)
         match_ids, source_count, program_hints = parse_program_match_hints_for_team(
             combined_html, team.name
         )
+        program_debug = {}
 
         semaphore = asyncio.Semaphore(8)
 
@@ -316,7 +426,7 @@ class VoetbalNlClient:
             item.time or "99:99",
             item.match_id,
         ))
-        return matches, source_count, len(match_ids)
+        return matches, source_count, len(match_ids), program_debug
 
     async def async_get_selected_team_data(self, club, team):
         """Fetch metadata and player list for one selected team."""
@@ -324,7 +434,7 @@ class VoetbalNlClient:
         players, hidden_count, staff, hidden_staff, player_debug = (
             await self.async_get_team_players(team)
         )
-        matches, source_count, candidate_count = await self.async_get_team_program(team)
+        matches, source_count, candidate_count, program_debug = await self.async_get_team_program(team)
         return SelectedTeamData(
             club=club,
             team=team,
@@ -337,6 +447,7 @@ class VoetbalNlClient:
             matches=matches,
             program_source_count=source_count,
             program_candidate_count=candidate_count,
+            program_debug=program_debug,
         )
 
 
