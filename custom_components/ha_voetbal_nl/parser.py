@@ -13,6 +13,7 @@ def _clean(value):
 
 def _norm(value):
     value = _clean(value).casefold()
+    value = value.replace(".", "")
     value = re.sub(r"\s+", " ", value)
     return value.strip()
 
