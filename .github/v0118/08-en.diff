@@ -1,0 +1,54 @@
+diff --git a/custom_components/ha_voetbal_nl/translations/en.json b/custom_components/ha_voetbal_nl/translations/en.json
+index c376cc2..ea97cfc 100644
+--- a/custom_components/ha_voetbal_nl/translations/en.json
++++ b/custom_components/ha_voetbal_nl/translations/en.json
+@@ -333,6 +333,38 @@
+           "extra_flaggers_manual": "Add people who are not in the player/staff list. Separate multiple names with commas or semicolons.",
+           "rebuild_match_tasks": "Only enable this when you deliberately want to rebuild the existing match planning for this team. Existing driving and flagger assignments for this team will be replaced and recalculated. The attendance poll has no influence on this."
+         }
++      },
++      "message_planning_team": {
++        "title": "WhatsApp message planning",
++        "description": "Choose the team whose WhatsApp timings you want to manage.",
++        "data": {
++          "message_plan_team_id": "Team"
++        }
++      },
++      "message_planning": {
++        "title": "WhatsApp planning — {team}",
++        "description": "**⚽ MATCHES**\n{match_summary}\n\n**🏃 TRAINING**\n{training_summary}\n\nClick the timing you want to edit directly, or add a new match/training message. Save all changes when finished.\n\nError detail: {error_detail}",
++        "data": {
++          "message_plan_action": "Action"
++        }
++      },
++      "message_planning_rules": {
++        "title": "Message timings — {category}",
++        "description": "Current planning:\n{rules_summary}\n\nFor edit/delete, select an existing message timing first. Error detail: {error_detail}",
++        "data": {
++          "rule_id": "Message timing",
++          "rule_action": "Action"
++        }
++      },
++      "message_planning_rule_edit": {
++        "title": "{category} · message {mode}",
++        "description": "You are explicitly editing a **{category}** message. Set type, days before and time.\n\nError detail: {error_detail}",
++        "data": {
++          "rule_type": "Message type",
++          "days_before": "Days before",
++          "rule_time": "Send time",
++          "form_action": "Action"
++        }
+       }
+     },
+     "abort": {
+@@ -364,7 +396,9 @@
+       "select_team_remove": "Select one team.",
+       "team_not_active": "This team is not active in the current selection.",
+       "cannot_remove_last_team": "The last active team cannot be removed. At least one team must remain active.",
+-      "team_not_found": "The selected team could not be found."
++      "team_not_found": "The selected team could not be found.",
++      "invalid_message_planning": "The message planning is invalid. Check the error detail and update the rules.",
++      "select_message_rule": "Select a message timing first."
+     }
+   }
+ }
