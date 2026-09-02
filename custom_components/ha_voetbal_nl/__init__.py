@@ -244,13 +244,60 @@ TRAINING_INFO_SERVICE_SCHEMA = vol.Schema({
 })
 
 
-def _extract_poll_id(result: dict) -> str | None:
-    """Extract WAHA poll message id from WEBJS response."""
-    candidates = [
-        ((result.get("id") or {}).get("id") if isinstance(result, dict) else None),
-        ((((result.get("_data") or {}).get("id") or {}).get("id")) if isinstance(result, dict) else None),
-    ]
+def _extract_poll_message_id(result: dict) -> str | None:
+    """Extract the full WAHA message id returned when a poll is sent."""
+    if not isinstance(result, dict):
+        return None
+    raw_id = result.get("id")
+    candidates = []
+    if isinstance(raw_id, str):
+        candidates.append(raw_id)
+    elif isinstance(raw_id, dict):
+        candidates.extend([raw_id.get("_serialized"), raw_id.get("serialized")])
+    data_id = (result.get("_data") or {}).get("id")
+    if isinstance(data_id, str):
+        candidates.append(data_id)
+    elif isinstance(data_id, dict):
+        candidates.extend([data_id.get("_serialized"), data_id.get("serialized")])
     return next((str(x) for x in candidates if x), None)
+
+
+def _extract_poll_id(result: dict) -> str | None:
+    """Extract the legacy inner poll id used by the attendance vote store."""
+    if not isinstance(result, dict):
+        return None
+    raw_id = result.get("id")
+    candidates = []
+    if isinstance(raw_id, dict):
+        candidates.append(raw_id.get("id"))
+    data_id = (result.get("_data") or {}).get("id")
+    if isinstance(data_id, dict):
+        candidates.append(data_id.get("id"))
+    candidates.append(_extract_poll_message_id(result))
+    value = next((str(x) for x in candidates if x), None)
+    if not value:
+        return None
+    # WAHA's full message id is normally true_<chatId>_<innerId>. The webhook
+    # for WEBJS reports only the inner parentMsgKey.id, which remains our store key.
+    if value.startswith(("true_", "false_")) and "_" in value:
+        parts = value.split("_", 2)
+        if len(parts) == 3 and parts[2]:
+            return parts[2].split("_", 1)[0]
+    return value
+
+
+def _poll_reply_message_id(poll_id: str, meta: dict) -> str | None:
+    """Return a full WAHA message id suitable for reply/pin operations."""
+    full = str((meta or {}).get("waha_message_id") or "").strip()
+    if full:
+        return full
+    poll_id = str(poll_id or "").strip()
+    if poll_id.startswith(("true_", "false_")):
+        return poll_id
+    chat_id = str((meta or {}).get("groep_id") or "").strip()
+    if poll_id and chat_id:
+        return f"true_{chat_id}_{poll_id}"
+    return None
 
 
 def _extract_vote_poll_id(payload: dict) -> str | None:
@@ -957,7 +1004,12 @@ async def _async_attendance_control(
     message = _build_reminder_message(team_data, summary, driver_info)
     sent = False
     if message and (summary.get("niet_gereageerd") or summary.get("staf_niet_gereageerd") or driver_info.get("chauffeurs_conflict")):
-        await client.send_text(str(meta.get("groep_id")), message, team_data.team.name)
+        await client.send_text(
+            str(meta.get("groep_id")),
+            message,
+            team_data.team.name,
+            reply_to=_poll_reply_message_id(poll_id, meta),
+        )
         sent = True
     if mark_done:
         store.update_poll(
@@ -1295,6 +1347,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         except WahaError as err:
             raise HomeAssistantError(f"WAHA wedstrijdinfo/poll verzenden mislukt: {err}") from err
         poll_id = _extract_poll_id(result)
+        waha_message_id = _extract_poll_message_id(result)
         if not poll_id:
             raise HomeAssistantError("WAHA heeft geen poll-ID teruggegeven.")
 
@@ -1308,6 +1361,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "groep_id": group_id,
             "groep_naam": group_name,
             "testmodus": test_mode,
+            "waha_message_id": waha_message_id,
+            "vastgezet": False,
+            "vastgezet_op": None,
+            "losgemaakt": False,
+            "losgemaakt_op": None,
             "verzonden_op": now_iso(),
             "verzonden_timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
             "poll_status": "actief",
@@ -1316,6 +1374,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "controle_24u_uitgevoerd": False,
             "gesloten": False,
         })
+        # v0.11.9: pin production match polls for seven days. Pinning is an
+        # enhancement only: a WAHA/engine pin failure must never block the poll.
+        if not test_mode and waha_message_id:
+            try:
+                await waha_client.pin_message(group_id, waha_message_id, duration=604800)
+            except Exception as err:
+                LOGGER.warning(
+                    "Wedstrijdpoll %s kon niet worden vastgezet in WhatsApp: %s",
+                    poll_id,
+                    err,
+                )
+            else:
+                attendance_store.update_poll(
+                    poll_id, vastgezet=True, vastgezet_op=now_iso()
+                )
+
         await attendance_store.async_save()
         coordinator.async_set_updated_data(coordinator.data)
         return {
@@ -1328,6 +1402,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "groep_naam": group_name,
             "testmodus": test_mode,
             "wedstrijdinfo_verzonden": True,
+            "poll_vastgezet": bool(attendance_store.poll(poll_id).get("vastgezet")),
+            "waha_message_id": waha_message_id,
             "wachttijd_voor_poll_seconden": 2,
         }
 
@@ -2094,12 +2170,56 @@ async def async_setup_entry(hass, entry):
                                 "Deze speler staat als chauffeur gepland. Graag zelf actie ondernemen "
                                 "of vervanging regelen. Het rijschema is niet aangepast."
                             )
+                            # Keep the existing group warning. A failure here must never
+                            # prevent the vote itself from being stored.
                             try:
-                                await coordinator.waha_client.send_text(str(poll_meta.get("groep_id")), warning, team_data.team.name)
-                                attendance_store.mark_conflict_notice(poll_id, matched_person, status)
+                                await coordinator.waha_client.send_text(
+                                    str(poll_meta.get("groep_id")),
+                                    warning,
+                                    team_data.team.name,
+                                )
+                                attendance_store.mark_conflict_notice(
+                                    poll_id, matched_person, status
+                                )
                                 await attendance_store.async_save()
                             except Exception:
                                 pass
+
+                            # v0.11.10: for production polls, also warn the planned
+                            # driver directly. The vote webhook already gives us the
+                            # correct WhatsApp identity (PN/@c.us or @lid), so no
+                            # separate phone-number administration is required.
+                            # Test polls deliberately never send private messages.
+                            private_key = (
+                                f"driverprivate:{poll_id}:"
+                                f"{_norm_simulation_person(matched_person)}:{status}"
+                            )
+                            if (
+                                not bool(poll_meta.get("testmodus"))
+                                and wa_id
+                                and not attendance_store.message_sent(private_key)
+                            ):
+                                private_warning = (
+                                    f"🚗 Chauffeurwaarschuwing - {team_data.team.name}\n"
+                                    f"{matched_person}, je hebt gestemd: {label}.\n"
+                                    f"{poll_meta.get('wedstrijd') or ''} - "
+                                    f"{poll_meta.get('datum') or ''} {poll_meta.get('tijd') or ''}\n\n"
+                                    "Je staat voor deze wedstrijd als chauffeur gepland. "
+                                    "Graag zelf actie ondernemen of vervanging regelen. "
+                                    "Het rijschema is niet aangepast."
+                                )
+                                try:
+                                    await coordinator.waha_client.send_text(
+                                        str(wa_id),
+                                        private_warning,
+                                        team_data.team.name,
+                                    )
+                                    attendance_store.mark_message_sent(private_key)
+                                    await attendance_store.async_save()
+                                except Exception:
+                                    # Private delivery is best-effort and may never
+                                    # interfere with the group warning or poll flow.
+                                    pass
             return Response(status=200)
 
         webhook.async_register(
@@ -2134,16 +2254,44 @@ async def async_setup_entry(hass, entry):
             store = coordinator.attendance_store
             changed_store = False
 
-            # Close every known poll at kickoff. Late WhatsApp votes are then ignored.
+            # Close every known match poll at kickoff. Late WhatsApp votes are then
+            # ignored. A pinned production poll is unpinned 2.5 hours after kickoff,
+            # when the match is safely over. Unpin failures are retried next tick.
             for poll_id, meta in list(store.data.get("polls", {}).items()):
-                if meta.get("gesloten"):
+                if meta.get("type") == "training":
                     continue
                 kickoff = _match_datetime_local(meta=meta)
-                if kickoff is not None and current >= kickoff:
+                if kickoff is None:
+                    continue
+                if current >= kickoff and not meta.get("gesloten"):
                     store.update_poll(
                         poll_id, poll_status="gesloten", gesloten=True, gesloten_op=now_iso()
                     )
                     changed_store = True
+
+                unpin_at = kickoff + timedelta(hours=2, minutes=30)
+                if (
+                    current >= unpin_at
+                    and not bool(meta.get("testmodus"))
+                    and bool(meta.get("vastgezet"))
+                    and not bool(meta.get("losgemaakt"))
+                ):
+                    message_id = _poll_reply_message_id(poll_id, meta)
+                    chat_id = str(meta.get("groep_id") or "").strip()
+                    if message_id and chat_id:
+                        try:
+                            await coordinator.waha_client.unpin_message(chat_id, message_id)
+                        except Exception as err:
+                            LOGGER.warning(
+                                "Wedstrijdpoll %s kon nog niet worden losgemaakt in WhatsApp: %s",
+                                poll_id,
+                                err,
+                            )
+                        else:
+                            store.update_poll(
+                                poll_id, losgemaakt=True, losgemaakt_op=now_iso()
+                            )
+                            changed_store = True
 
             if changed_store:
                 await store.async_save()

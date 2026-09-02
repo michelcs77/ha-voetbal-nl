@@ -122,8 +122,14 @@ class WahaClient:
                 )
         return "De AI-Stafchef"
 
-    async def send_text(self, chat_id: str, text: str, team_name: str | None = None):
-        """Send a WhatsApp text message with a team-specific digital-staff signature."""
+    async def send_text(
+        self,
+        chat_id: str,
+        text: str,
+        team_name: str | None = None,
+        reply_to: str | None = None,
+    ):
+        """Send text, optionally as a WhatsApp reply to an existing message."""
         assistant_name = self._assistant_name_for_chat(chat_id)
         team_label = str(team_name or "v.v. Cuijk").strip() or "v.v. Cuijk"
         signature = (
@@ -132,14 +138,36 @@ class WahaClient:
         )
         if signature not in text:
             text = f"{text.rstrip()}\n\n{signature}"
+        payload = {
+            "session": self.session_name,
+            "chatId": chat_id,
+            "text": text,
+        }
+        if reply_to:
+            payload["reply_to"] = str(reply_to)
+        return await self._json("POST", "/api/sendText", json=payload)
+
+    async def pin_message(
+        self, chat_id: str, message_id: str, duration: int = 604800
+    ):
+        """Pin a WhatsApp message (WEBJS/NOWEB). Default: seven days."""
+        session = quote(self.session_name, safe="")
+        chat = quote(str(chat_id), safe="")
+        message = quote(str(message_id), safe="")
         return await self._json(
             "POST",
-            "/api/sendText",
-            json={
-                "session": self.session_name,
-                "chatId": chat_id,
-                "text": text,
-            },
+            f"/api/{session}/chats/{chat}/messages/{message}/pin",
+            json={"duration": int(duration)},
+        )
+
+    async def unpin_message(self, chat_id: str, message_id: str):
+        """Remove a WhatsApp message pin (WEBJS/NOWEB)."""
+        session = quote(self.session_name, safe="")
+        chat = quote(str(chat_id), safe="")
+        message = quote(str(message_id), safe="")
+        return await self._json(
+            "POST",
+            f"/api/{session}/chats/{chat}/messages/{message}/unpin",
         )
 
     async def resolve_lid(self, voter: str) -> str | None:
