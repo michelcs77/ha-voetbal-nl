@@ -1,7 +1,10 @@
 name: Apply HA Voetbal.nl v0.11.8
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v0118.yml'
 
 permissions:
   contents: write
@@ -23,7 +26,6 @@ jobs:
           rm -rf custom_components/ha_voetbal_nl/__pycache__
           find custom_components/ha_voetbal_nl -type f -name '*.pyc' -delete
           python -m compileall -q custom_components/ha_voetbal_nl
-          rm -rf custom_components/ha_voetbal_nl/__pycache__
           find custom_components/ha_voetbal_nl -type d -name '__pycache__' -prune -exec rm -rf {} +
           python - <<'PY'
           import json
