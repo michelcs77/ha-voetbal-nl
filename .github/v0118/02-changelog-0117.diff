@@ -1,0 +1,20 @@
+diff --git a/custom_components/ha_voetbal_nl/CHANGELOG_v0.11.7.md b/custom_components/ha_voetbal_nl/CHANGELOG_v0.11.7.md
+new file mode 100644
+index 0000000..e8ee902
+--- /dev/null
++++ b/custom_components/ha_voetbal_nl/CHANGELOG_v0.11.7.md
+@@ -0,0 +1,14 @@
++# HA Voetbal.nl v0.11.7
++
++## Visuele WhatsApp-berichtenplanner
++
++- De vrije tekstregels uit v0.11.6 zijn vervangen door een visuele Home Assistant-configuratie.
++- Per team een overzicht van wedstrijd- en trainingsberichten.
++- Berichtmomenten toevoegen, wijzigen en verwijderen via losse formulieren.
++- Native Home Assistant tijdkiezer voor de verzendtijd.
++- Keuzelijst voor 0 t/m 30 dagen vooraf.
++- Keuze uit Poll, Reminder en Infobericht.
++- Leesbaar planningsoverzicht, bijvoorbeeld `🔔 Reminder — 1 dag vooraf om 20:00`.
++- Validatie voorkomt dubbele polls/info, reminders zonder poll en reminders vóór het pollmoment.
++- Wijzigingen worden pas definitief bij `Planning opslaan`; teruggaan kan zonder wijzigingen te bewaren.
++- Bestaande v0.11.6 message schedules blijven volledig compatibel.
