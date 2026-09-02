@@ -335,6 +335,38 @@
           "extra_flaggers_manual": "Voeg personen toe die niet in de spelers-/staflijst staan. Gebruik komma's of puntkomma's tussen meerdere namen.",
           "rebuild_match_tasks": "Alleen aanvinken wanneer je bewust de bestaande wedstrijdplanning voor dit team opnieuw wilt opbouwen. Dit wist de bestaande rij- en vlaggertoewijzingen voor dit team en berekent ze opnieuw. De aanwezigheidspoll heeft hier geen invloed op."
         }
+      },
+      "message_planning_team": {
+        "title": "WhatsApp-berichtenplanning",
+        "description": "Kies het team waarvoor je de WhatsApp-momenten wilt beheren.",
+        "data": {
+          "message_plan_team_id": "Team"
+        }
+      },
+      "message_planning": {
+        "title": "WhatsApp-planning — {team}",
+        "description": "**⚽ WEDSTRIJDEN**\n{match_summary}\n\n**🏃 TRAININGEN**\n{training_summary}\n\nKlik hieronder **direct op het berichtmoment dat je wilt aanpassen**, of voeg een nieuw wedstrijd- of trainingsbericht toe. Iedere keuze vermeldt expliciet WEDSTRIJD of TRAINING. Wijzigingen worden definitief met **Alle wijzigingen opslaan**.\n\nFoutdetail: {error_detail}",
+        "data": {
+          "message_plan_action": "Berichtmoment / actie"
+        }
+      },
+      "message_planning_rules": {
+        "title": "Berichtmomenten — {category}",
+        "description": "Huidige planning:\n{rules_summary}\n\nSelecteer bij wijzigen/verwijderen eerst een bestaand berichtmoment. Foutdetail: {error_detail}",
+        "data": {
+          "rule_id": "Berichtmoment",
+          "rule_action": "Actie"
+        }
+      },
+      "message_planning_rule_edit": {
+        "title": "{category} · bericht {mode}",
+        "description": "Je past nu expliciet een **{category}**-bericht aan. Stel type, aantal dagen vooraf en tijd in. Je kunt hier ook direct verwijderen of teruggaan.\n\nFoutdetail: {error_detail}",
+        "data": {
+          "rule_type": "Type {category}-bericht",
+          "days_before": "Dagen vooraf",
+          "rule_time": "Verzendtijd",
+          "form_action": "Wat wil je doen?"
+        }
       }
     },
     "abort": {
@@ -367,7 +399,9 @@
       "select_team_remove": "Selecteer één team.",
       "team_not_active": "Dit team is niet actief in de huidige selectie.",
       "cannot_remove_last_team": "Het laatste actieve team kan niet worden verwijderd. Er moet minimaal één team actief blijven.",
-      "team_not_found": "Het gekozen team kon niet worden gevonden."
+      "team_not_found": "Het gekozen team kon niet worden gevonden.",
+      "invalid_message_planning": "De berichtenplanning is ongeldig. Controleer het foutdetail en pas de regels aan.",
+      "select_message_rule": "Selecteer eerst een berichtmoment."
     }
   },
   "services": {

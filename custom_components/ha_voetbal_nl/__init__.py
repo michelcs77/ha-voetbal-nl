@@ -75,6 +75,8 @@ from .const import (
     DEFAULT_REMINDER_DAYS_BEFORE,
     DEFAULT_REMINDER_TIME,
     POLL_SCHEDULER_INTERVAL_MINUTES,
+    CONF_WAHA_MESSAGE_SCHEDULE, CONF_TRAINING_MESSAGE_SCHEDULE,
+    MESSAGE_TYPE_POLL, MESSAGE_TYPE_REMINDER, MESSAGE_TYPE_INFO,
     CONF_TRAINING_POLL_DAYS_BEFORE, CONF_TRAINING_POLL_TIME,
     CONF_TRAINING_REMINDER_DAYS_BEFORE, CONF_TRAINING_REMINDER_TIME, CONF_TRAINING_PRODUCTION_ENABLED,
     DEFAULT_TRAINING_POLL_DAYS_BEFORE, DEFAULT_TRAINING_POLL_TIME,
@@ -2170,6 +2172,50 @@ async def async_setup_entry(hass, entry):
 
                 poll_id, meta = store.latest_poll(team_id, match.match_id, False)
 
+                # v0.11.6: dynamic per-team planning. Presence of a schedule list means
+                # the new planner owns poll/reminder/info timing for this team.
+                message_schedule = team_cfg.get(CONF_WAHA_MESSAGE_SCHEDULE)
+                if isinstance(message_schedule, list):
+                    rules = [x for x in message_schedule if isinstance(x, dict) and x.get("enabled", True)]
+                    poll_rules = [x for x in rules if x.get("type") == MESSAGE_TYPE_POLL]
+                    reminder_rules = [x for x in rules if x.get("type") == MESSAGE_TYPE_REMINDER]
+                    info_rules = [x for x in rules if x.get("type") == MESSAGE_TYPE_INFO]
+
+                    if attendance_mode == WAHA_ATTENDANCE_MODE_POLLS and poll_id is None and poll_rules:
+                        rule = poll_rules[0]
+                        due = _scheduled_local_datetime(kickoff, int(rule.get("days_before", 0)), str(rule.get("time") or DEFAULT_POLL_TIME))
+                        if due is not None and current >= due and current < kickoff:
+                            try:
+                                await hass.services.async_call(DOMAIN, SERVICE_SEND_ATTENDANCE_POLL, {ATTR_TEAM_ID: team_id, ATTR_TEST_MODE: False}, blocking=True)
+                            except Exception:
+                                pass
+                            continue
+
+                    # Refresh poll metadata in case it was created in a prior tick.
+                    poll_id, meta = store.latest_poll(team_id, match.match_id, False)
+                    if attendance_mode == WAHA_ATTENDANCE_MODE_POLLS and poll_id and meta and not meta.get("gesloten"):
+                        for rule in reminder_rules:
+                            due = _scheduled_local_datetime(kickoff, int(rule.get("days_before", 0)), str(rule.get("time") or DEFAULT_REMINDER_TIME))
+                            rule_id = str(rule.get("id") or f"reminder_{rule.get('days_before',0)}_{rule.get('time','1900')}")
+                            sent_key = f"matchreminder:{team_id}:{match.match_id}:{rule_id}:prod"
+                            if due is None or current < due or current >= kickoff or store.message_sent(sent_key):
+                                continue
+                            try:
+                                await _async_attendance_control(coordinator, team_data, test_mode=False, mark_done=False, match_id=match.match_id)
+                            except Exception:
+                                continue
+                            store.mark_message_sent(sent_key)
+                            await store.async_save()
+
+                    for rule in info_rules:
+                        due = _scheduled_local_datetime(kickoff, int(rule.get("days_before", 0)), str(rule.get("time") or DEFAULT_MATCHDAY_MESSAGE_TIME))
+                        if due is not None and current >= due and current < kickoff:
+                            try:
+                                await _send_matchday_info(coordinator, team_data, match, False, force=False)
+                            except Exception:
+                                pass
+                    continue
+
                 if attendance_mode == WAHA_ATTENDANCE_MODE_MESSAGES:
                     # No poll and no poll reminder for this team. Use the existing
                     # match information message on the configured matchday time.
@@ -2272,6 +2318,45 @@ async def async_setup_entry(hass, entry):
                 rem_time=str(cfg.get(CONF_TRAINING_REMINDER_TIME,DEFAULT_TRAINING_REMINDER_TIME))
                 poll_at=_scheduled_local_datetime(start,poll_days,poll_time); rem_at=_scheduled_local_datetime(start,rem_days,rem_time)
                 pid,meta=store.latest_training_poll(team_id,tid,False)
+                message_schedule = cfg.get(CONF_TRAINING_MESSAGE_SCHEDULE)
+                if isinstance(message_schedule, list):
+                    rules=[x for x in message_schedule if isinstance(x,dict) and x.get("enabled",True)]
+                    poll_rules=[x for x in rules if x.get("type")==MESSAGE_TYPE_POLL]
+                    reminder_rules=[x for x in rules if x.get("type")==MESSAGE_TYPE_REMINDER]
+                    info_rules=[x for x in rules if x.get("type")==MESSAGE_TYPE_INFO]
+                    if attendance_mode==WAHA_ATTENDANCE_MODE_POLLS and pid is None and poll_rules:
+                        rule=poll_rules[0]
+                        due=_scheduled_local_datetime(start,int(rule.get("days_before",0)),str(rule.get("time") or DEFAULT_TRAINING_POLL_TIME))
+                        if due is not None and current>=due and current<start:
+                            try: await hass.services.async_call(DOMAIN,SERVICE_SEND_TRAINING_POLL,{ATTR_TEAM_ID:team_id,ATTR_TEST_MODE:False},blocking=True)
+                            except Exception: pass
+                            continue
+                    pid,meta=store.latest_training_poll(team_id,tid,False)
+                    if attendance_mode==WAHA_ATTENDANCE_MODE_POLLS and pid and meta and not meta.get("gesloten"):
+                        for rule in reminder_rules:
+                            due=_scheduled_local_datetime(start,int(rule.get("days_before",0)),str(rule.get("time") or DEFAULT_TRAINING_REMINDER_TIME))
+                            rule_id=str(rule.get("id") or f"reminder_{rule.get('days_before',0)}_{rule.get('time','1900')}")
+                            sent_key=f"trainingreminder:{team_id}:{tid}:{rule_id}:prod"
+                            if due is None or current<due or current>=start or store.message_sent(sent_key): continue
+                            try: await _async_training_control(coordinator,td,False,False,training_id=tid)
+                            except Exception: continue
+                            store.mark_message_sent(sent_key); await store.async_save()
+                    if info_rules:
+                        for rule in info_rules:
+                            due=_scheduled_local_datetime(start,int(rule.get("days_before",0)),str(rule.get("time") or '18:00'))
+                            if due is not None and current>=due and current<start:
+                                try: await _send_training_info(coordinator,td,item,False,force=False)
+                                except Exception: pass
+                    else:
+                        # Preserve the pre-v0.11.6 X-hours-before training info setting until
+                        # the user explicitly adds an info rule to the new planner.
+                        info_enabled=bool(cfg.get(CONF_TRAINING_INFO_ENABLED,True))
+                        info_hours=int(cfg.get(CONF_TRAINING_INFO_HOURS_BEFORE,DEFAULT_TRAINING_INFO_HOURS_BEFORE))
+                        info_at=start-timedelta(hours=max(0,info_hours))
+                        if info_enabled and current>=info_at and current<start:
+                            try: await _send_training_info(coordinator,td,item,False,force=False)
+                            except Exception: pass
+                    continue
                 production_enabled=bool(cfg.get(CONF_TRAINING_PRODUCTION_ENABLED,True))
                 if attendance_mode == WAHA_ATTENDANCE_MODE_MESSAGES:
                     # No poll, no poll reminder, and no attendance summary.
